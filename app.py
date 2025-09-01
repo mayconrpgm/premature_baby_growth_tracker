@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from fpdf import FPDF
 import base64
 from sklearn.linear_model import LinearRegression
+import math
 
 # --- Page Configuration ---
 st.set_page_config(
@@ -17,14 +18,62 @@ st.set_page_config(
 )
 
 # --- Data Loading and Caching ---
-@st.cache_data
+@st.cache_data(show_spinner=True)
 def load_data():
     """Loads, processes, and caches the INTERGROWTH-21st data."""
     try:
         df_long = pd.read_csv('intergrowth_combined_data.csv')
+        st.write("Debug - Colunas originais:", df_long.columns.tolist())
+        st.write("Debug - Primeiras linhas:", df_long.head())
         
         # Rename columns for clarity and consistency
-        df_long.rename(columns={'age_weeks': 'ga', 'metric': 'param', 'measurement_type': 'curve', 'value': 'measurement'}, inplace=True)
+        df_long.rename(columns={
+            'sex': 'sex',
+            'metric': 'param',
+            'measurement_type': 'curve',
+            'age_weeks': 'ga',
+            'measurement_value': 'percentile',
+            'value': 'measurement'
+        }, inplace=True)
+
+        # Map centile values to our expected column names and calculate z-scores
+        centile_map = {
+            '3rd': 'p3',
+            '5th': 'p5',
+            '10th': 'p10',
+            '50th': 'p50',
+            '90th': 'p90',
+            '95th': 'p95',
+            '97th': 'p97'
+        }
+        
+        # Map percentiles to z-scores
+        z_score_map = {
+            '-3': 'z-3',  # Approximately -2.58
+            '-2': 'z-2',  # Approximately -1.88
+            '-1': 'z-1', # Approximately -1.28
+            '0': 'z0',  # Mean
+            '1': 'z1',  # Approximately 1.28
+            '2': 'z2',   # Approximately 1.88
+            '3': 'z3',   # Approximately 2.58
+        }
+        
+        # Create two rows for each measurement, one for percentile and one for z-score
+        df_percentiles = df_long.copy()
+        df_zscores = df_long.copy()
+        
+        df_percentiles['curve'] = df_percentiles['percentile'].map(centile_map)
+        df_zscores['curve'] = df_zscores['percentile'].map(z_score_map)
+        
+        # Combine the dataframes and remove rows where mapping resulted in None
+        df_long = pd.concat([df_percentiles, df_zscores])
+        df_long = df_long.dropna(subset=['curve'])
+
+        st.write("Debug - Valores únicos:", {
+            'sex': df_long['sex'].unique(),
+            'param': df_long['param'].unique(),
+            'curve': df_long['curve'].unique()
+        })
 
         # Pivot the table from long to wide format
         df_wide = df_long.pivot_table(
@@ -35,6 +84,9 @@ def load_data():
 
         # Clean up column names after pivot
         df_wide.columns.name = None
+        
+        st.write("Debug - Colunas após pivot:", df_wide.columns.tolist())
+        st.write("Debug - Primeiras linhas após pivot:", df_wide.head())
         
         # Convert gestational age weeks to numeric
         df_wide['ga'] = pd.to_numeric(df_wide['ga'], errors='coerce')
@@ -104,7 +156,7 @@ def get_z_score_and_percentile(pma_decimal, value, sex, metric, df):
     z_score = (value - mean) / sd
     
     # Percentile from Z-score (using standard normal distribution CDF)
-    percentile = 0.5 * (1 + np.math.erf(z_score / np.sqrt(2))) * 100
+    percentile = 0.5 * (1 + math.erf(z_score / np.sqrt(2))) * 100
     
     return z_score, percentile
 
@@ -167,6 +219,13 @@ with st.sidebar:
     st.session_state.birth_date = st.date_input("Birth Date", value=st.session_state.birth_date)
 
     sex = st.selectbox("Sex", ("Male", "Female"), key="sex")
+    metric_map = {
+        "Weight_kg": "weight",
+        "Length_cm": "length",
+        "Head_Circumference_cm": "hc"
+    }
+    reverse_metric_map = {v: k for k, v in metric_map.items()}
+    
     metric = st.selectbox("Metric", ("weight", "length", "hc"), format_func=lambda x: {"weight": "Weight (kg)", "length": "Length (cm)", "hc": "Head Circumference (cm)"}[x], key="metric")
     display_mode = st.radio("Display Curves", ("Percentiles", "Z-Scores"), key="display_mode")
 
@@ -201,28 +260,65 @@ with st.sidebar:
         st.session_state.patient_data = st.session_state.patient_data.sort_values(by=['pma_weeks', 'pma_days']).reset_index(drop=True)
 
 # --- Main Panel ---
-metric_label = {"weight": "Weight", "length": "Length", "hc": "Head Circumference"}[metric]
-st.header(f"Growth Chart: {sex} - {metric_label}")
 
-# Filter data for plotting
-chart_data = data[(data['sex'] == sex) & (data['param'] == metric) & (data['ga'] <= 64)]
+# Use session state for filtering and labels
+metric_label = {"weight": "Weight", "length": "Length", "hc": "Head Circumference"}[st.session_state.metric]
+st.header(f"Growth Chart: {st.session_state.sex} - {metric_label}")
 
-# Create Figure
+# Filter data for plotting (always use session state)
+st.write("Debug - Estado da sessão:", {
+    'sex': st.session_state.sex,
+    'metric': st.session_state.metric
+})
+
+# Map interface values to dataframe values
+sex_map = {"Male": "Boy", "Female": "Girl"}
+selected_sex = sex_map[st.session_state.sex]
+selected_metric = reverse_metric_map[st.session_state.metric]
+
+st.write("Debug - Valores mapeados:", {
+    'sex': selected_sex,
+    'metric': selected_metric
+})
+
+chart_data = data[(data['sex'] == selected_sex) & (data['param'] == selected_metric) & (data['ga'] <= 64)]
+
+st.write("Debug - Dados filtrados:", {
+    'linhas': len(chart_data),
+    'colunas': chart_data.columns.tolist(),
+    'amostra': chart_data.head().to_dict()
+})
+
+# Debug curve columns
+if st.session_state.display_mode == 'Percentiles':
+    expected_curves = ['p3', 'p10', 'p50', 'p90', 'p97']
+else:
+    expected_curves = ['z-3', 'z-2', 'z-1', 'z0', 'z1', 'z2', 'z3']
+
+st.write("Debug - Curve columns check:", {
+    'expected_curves': expected_curves,
+    'available_curves': [c for c in expected_curves if c in chart_data.columns],
+    'sample_values': {c: chart_data[c].head().tolist() if c in chart_data.columns else 'Not found' 
+                     for c in expected_curves}
+})
+
+# Create Figure with light theme
 fig = go.Figure()
+fig.update_layout(template="plotly_white")
 
 # Add Percentile/Z-score curves
 if not chart_data.empty:
-    if display_mode == 'Percentiles':
+    if st.session_state.display_mode == 'Percentiles':
         curves = ['p3', 'p10', 'p50', 'p90', 'p97']
         labels = ['3rd', '10th', '50th', '90th', '97th']
         colors = ['red', 'orange', 'green', 'orange', 'red']
     else: # Z-Scores
         curves = ['z-3', 'z-2', 'z-1', 'z0', 'z1', 'z2', 'z3']
-        labels = ['-3 SD', '-2 SD', '-1 SD', '0 SD', '1 SD', '2 SD', '3 SD']
+        labels = ['-3', '-2', '-1', '0', '1', '2', '3']
         colors = ['darkred', 'red', 'orange', 'green', 'orange', 'red', 'darkred']
 
     for curve, label, color in zip(curves, labels, colors):
-        if curve in chart_data.columns:
+        if curve in chart_data.columns and chart_data[curve].notnull().any():
             fig.add_trace(go.Scatter(
                 x=chart_data['ga'],
                 y=chart_data[curve],
@@ -288,6 +384,7 @@ fig.update_layout(
     hovermode="x unified",
     margin=dict(l=20, r=20, t=40, b=20),
     xaxis=dict(range=[24, 64]), # Set default view range
+    height=800  # Increased height (default is about 320px)
 )
 
 st.plotly_chart(fig, use_container_width=True)
@@ -308,8 +405,13 @@ if not st.session_state.patient_data.empty:
     
     z_scores = []
     percentiles = []
+    
+    # Map the sex and metric values to match the dataframe values
+    mapped_sex = sex_map[sex]  # Convert Male/Female to Boy/Girl
+    mapped_metric = reverse_metric_map[metric]  # Convert weight/length/hc to Weight_kg/Length_cm/Head_Circumference_cm
+    
     for index, row in display_df.iterrows():
-        z, p = get_z_score_and_percentile(row['PMA (decimal)'], row['value'], sex, metric, data)
+        z, p = get_z_score_and_percentile(row['PMA (decimal)'], row['value'], mapped_sex, mapped_metric, data)
         z_scores.append(f"{z:.2f}" if not pd.isna(z) else "N/A")
         percentiles.append(f"{p:.1f}" if not pd.isna(p) else "N/A")
 
@@ -368,7 +470,11 @@ if not st.session_state.patient_data.empty:
             pdf.summary_table(table_header, table_data)
 
             # Provide download link
-            pdf_output = pdf.output(dest='S').encode('latin1')
+            pdf_bytes = pdf.output(dest='S')
+            if isinstance(pdf_bytes, str):
+                pdf_output = pdf_bytes.encode('latin1')
+            else:
+                pdf_output = pdf_bytes
             st.markdown(create_download_link(pdf_output, f"{patient_name or 'patient'}_growth_report.pdf", "Click here to download your PDF report"), unsafe_allow_html=True)
 
 else:
