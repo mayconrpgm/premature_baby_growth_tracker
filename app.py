@@ -17,17 +17,17 @@ st.set_page_config(
 )
 
 # Custom CSS to adjust sidebar width
-st.markdown(
-    """
-    <style>
-        [data-testid="stSidebar"][aria-expanded="true"]{
-            min-width: 400px;
-            max-width: 400px;
-        }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+# st.markdown(
+#     """
+#     <style>
+#         [data-testid="stSidebar"][aria-expanded="true"]{
+#             min-width: 400px;
+#             max-width: 400px;
+#         }
+#     </style>
+#     """,
+#     unsafe_allow_html=True,
+# )
 
 # Enable/Disable debug mode
 if 'debug_mode' not in st.session_state:
@@ -39,8 +39,8 @@ def load_data():
     """Loads, processes, and caches the INTERGROWTH-21st data."""
     try:
         df_long = pd.read_csv('intergrowth_combined_data.csv')
-        debug_print("Colunas originais:", df_long.columns.tolist())
-        debug_print("Primeiras linhas:", df_long.head())
+        debug_print("Original Columns:", df_long.columns.tolist())
+        debug_print("File Head:", df_long.head())
         
         # Rename columns for clarity and consistency
         df_long.rename(columns={
@@ -85,7 +85,7 @@ def load_data():
         df_long = pd.concat([df_percentiles, df_zscores])
         df_long = df_long.dropna(subset=['curve'])
 
-        debug_print("Valores únicos:", {
+        debug_print("Unique Values:", {
             'sex': df_long['sex'].unique(),
             'param': df_long['param'].unique(),
             'curve': df_long['curve'].unique()
@@ -101,8 +101,8 @@ def load_data():
         # Clean up column names after pivot
         df_wide.columns.name = None
         
-        debug_print("Debug - Colunas após pivot:", df_wide.columns.tolist())
-        debug_print("Debug - Primeiras linhas após pivot:", df_wide.head())
+        debug_print("Columns After Pivot:", df_wide.columns.tolist())
+        debug_print("Data Head After Pivot:", df_wide.head())
         
         # Convert gestational age weeks to numeric
         df_wide['ga'] = pd.to_numeric(df_wide['ga'], errors='coerce')
@@ -212,7 +212,7 @@ class PDF(FPDF):
 
     def summary_table(self, header, data):
         self.set_font('Arial', 'B', 10)
-        col_widths = [25, 30, 25, 25, 25, 25]
+        col_widths = [25, 30, 25, 25, 25, 25, 25]  # Added one more column for HC
         for i, item in enumerate(header):
             self.cell(col_widths[i], 7, item, 1, 0, 'C')
         self.ln()
@@ -241,6 +241,16 @@ if 'birth_date' not in st.session_state:
     st.session_state.birth_date = datetime.now().date() - timedelta(days=30)
 if 'display_mode' not in st.session_state:
     st.session_state.display_mode = "Percentiles"
+if 'patient_name' not in st.session_state:
+    st.session_state.patient_name = ""
+
+# Handle temp patient info if available
+if 'temp_patient_info' in st.session_state:
+    st.session_state.patient_name = st.session_state.temp_patient_info['name']
+    st.session_state.birth_ga_weeks = st.session_state.temp_patient_info['ga_weeks']
+    st.session_state.birth_ga_days = st.session_state.temp_patient_info['ga_days']
+    st.session_state.birth_date = st.session_state.temp_patient_info['birth_date']
+    del st.session_state['temp_patient_info']
 
 
 # --- UI: Sidebar ---
@@ -252,15 +262,16 @@ with st.sidebar:
     
     st.header("Patient Information")
 
-    patient_name = st.text_input("Patient Name (Optional for PDF)", key="patient_name")
-    
     # CSV File Upload - Moved higher
     uploaded_file = st.file_uploader(
-        "Import measurements from CSV",
+        "Import data from CSV",
         type=['csv'],
         key="measurement_csv_upload",
         help="Upload a CSV file containing measurements. The file should have columns: PMA, Date, Weight, Length, HC"
     )
+
+    patient_name = st.text_input("Patient Name (Optional for PDF)", key="patient_name", value=st.session_state.patient_name)
+    
     
     c1, c2 = st.columns(2)
     with c1:
@@ -297,68 +308,16 @@ with st.sidebar:
                 # Parse birth date
                 birth_date = datetime.strptime(dob_part, '%Y%m%d').date()
                 
-                # Update session state
-                st.session_state.patient_name = name_part
-                st.session_state.birth_ga_weeks = ga_weeks
-                st.session_state.birth_ga_days = ga_days
-                st.session_state.birth_date = birth_date
+                # Store patient info temporarily (will be applied after rerun if needed)
+                st.session_state['temp_patient_info'] = {
+                    'name': name_part,
+                    'ga_weeks': ga_weeks,
+                    'ga_days': ga_days,
+                    'birth_date': birth_date
+                }
                 
                 st.success("Patient information loaded from filename!")
             
-            imported_df = pd.read_csv(uploaded_file)
-            required_columns = ['PMA', 'Date', 'Weight', 'Length', 'HC']
-            if not all(col in imported_df.columns for col in required_columns):
-                st.error("CSV must contain columns: PMA, Date, Weight, Length, HC")
-            else:
-                # Clear existing data before import
-                st.session_state.patient_data = pd.DataFrame(columns=[
-                    'pma_weeks', 'pma_days', 'measurement_date', 
-                    'weight', 'length', 'hc'
-                ])
-                
-                # Process the imported data
-                for _, row in imported_df.iterrows():
-                    pma_parts = row['PMA'].split('w')
-                    weeks = int(pma_parts[0])
-                    days = int(pma_parts[1].replace('d', ''))
-                    new_data = {
-                        'pma_weeks': weeks,
-                        'pma_days': days,
-                        'measurement_date': pd.to_datetime(row['Date']).date() if pd.notna(row['Date']) else None,
-                        'weight': row['Weight'] if pd.notna(row['Weight']) else None,
-                        'length': row['Length'] if pd.notna(row['Length']) else None,
-                        'hc': row['HC'] if pd.notna(row['HC']) else None
-                    }
-                    st.session_state.patient_data = pd.concat([st.session_state.patient_data, pd.DataFrame([new_data])], ignore_index=True)
-                st.success("Data imported successfully!")
-                st.rerun()  # Rerun to update all UI elements
-        except Exception as e:
-            st.error(f"Error importing data: {str(e)}")
-
-    st.header("Add Measurement")
-    
-    use_date_for_pma = st.toggle("Calculate PMA from Date", value=True)
-
-    if use_date_for_pma:
-        meas_date = st.date_input("Measurement Date", value=datetime.now().date())
-        birth_ga_decimal = pma_to_decimal_weeks(st.session_state.birth_ga_weeks, st.session_state.birth_ga_days)
-        pma_decimal_calc = calculate_pma_from_date(birth_ga_decimal, datetime.combine(st.session_state.birth_date, datetime.min.time()), datetime.combine(meas_date, datetime.min.time()))
-        pma_w_calc, pma_d_calc = decimal_weeks_to_pma(pma_decimal_calc)
-        st.info(f"Calculated PMA: {pma_w_calc} weeks + {pma_d_calc} days")
-        meas_pma_weeks, meas_pma_days = pma_w_calc, pma_d_calc
-    else:
-        c3, c4 = st.columns(2)
-        meas_pma_weeks = c3.number_input("PMA (weeks)", min_value=st.session_state.birth_ga_weeks, max_value=64, step=1)
-        meas_pma_days = c4.number_input("PMA (days)", min_value=0, max_value=6, step=1)
-        meas_date = None
-
-    # Measurement inputs
-    st.subheader("Measurements")
-    
-    # CSV File Upload
-    uploaded_file = st.file_uploader("Import measurements from CSV", type=['csv'], key="measurements_uploader")
-    if uploaded_file is not None:
-        try:
             imported_df = pd.read_csv(uploaded_file)
             required_columns = ['PMA', 'Date', 'Weight', 'Length', 'HC']
             
@@ -389,12 +348,67 @@ with st.sidebar:
                 st.success("Data imported successfully!")
         except Exception as e:
             st.error(f"Error importing data: {str(e)}")
+
+    st.header("Add Measurement")
+    
+    use_date_for_pma = st.toggle("Calculate PMA from Date", value=True)
+
+    if use_date_for_pma:
+        meas_date = st.date_input("Measurement Date", value=datetime.now().date())
+        birth_ga_decimal = pma_to_decimal_weeks(st.session_state.birth_ga_weeks, st.session_state.birth_ga_days)
+        pma_decimal_calc = calculate_pma_from_date(birth_ga_decimal, datetime.combine(st.session_state.birth_date, datetime.min.time()), datetime.combine(meas_date, datetime.min.time()))
+        pma_w_calc, pma_d_calc = decimal_weeks_to_pma(pma_decimal_calc)
+        st.info(f"Calculated PMA: {pma_w_calc} weeks + {pma_d_calc} days")
+        meas_pma_weeks, meas_pma_days = pma_w_calc, pma_d_calc
+    else:
+        c3, c4 = st.columns(2)
+        meas_pma_weeks = c3.number_input("PMA (weeks)", min_value=st.session_state.birth_ga_weeks, max_value=64, step=1)
+        meas_pma_days = c4.number_input("PMA (days)", min_value=0, max_value=6, step=1)
+        meas_date = None
+
+    # Measurement inputs
+    st.subheader("Measurements")
+    
+    # CSV File Upload
+    # uploaded_file = st.file_uploader("Import measurements from CSV", type=['csv'], key="measurements_uploader")
+    # if uploaded_file is not None:
+    #     try:
+    #         imported_df = pd.read_csv(uploaded_file)
+    #         required_columns = ['PMA', 'Date', 'Weight', 'Length', 'HC']
+            
+    #         if not all(col in imported_df.columns for col in required_columns):
+    #             st.error("CSV must contain columns: PMA, Date, Weight, Length, HC")
+    #         else:
+    #             # Process the imported data
+    #             for _, row in imported_df.iterrows():
+    #                 pma_parts = row['PMA'].split('w')
+    #                 weeks = int(pma_parts[0])
+    #                 days = int(pma_parts[1].replace('d', ''))
+    #                 new_data = {
+    #                     'pma_weeks': weeks,
+    #                     'pma_days': days,
+    #                     'measurement_date': pd.to_datetime(row['Date']).date() if pd.notna(row['Date']) else None,
+    #                     'weight': row['Weight'] if pd.notna(row['Weight']) else None,
+    #                     'length': row['Length'] if pd.notna(row['Length']) else None,
+    #                     'hc': row['HC'] if pd.notna(row['HC']) else None
+    #                 }
+    #                 st.session_state.patient_data = pd.concat([st.session_state.patient_data, pd.DataFrame([new_data])], ignore_index=True)
+    #             # Sort and remove duplicates
+    #             st.session_state.patient_data = (
+    #                 st.session_state.patient_data
+    #                 .sort_values(by=['pma_weeks', 'pma_days'])
+    #                 .drop_duplicates(subset=['pma_weeks', 'pma_days', 'weight', 'length', 'hc'])
+    #                 .reset_index(drop=True)
+    #             )
+    #             st.success("Data imported successfully!")
+    #     except Exception as e:
+    #         st.error(f"Error importing data: {str(e)}")
             
     weight = st.number_input("Weight (kg)", min_value=0.0, step=0.001, format="%.3f", key="weight")
     length = st.number_input("Length (cm)", min_value=0.0, step=0.1, format="%.1f", key="length")
     hc = st.number_input("Head Circumference (cm)", min_value=0.0, step=0.1, format="%.1f", key="hc")
 
-    if st.button("➕ Add Measurement", use_container_width=True):
+    if st.button("➕ Add Measurement", width='stretch'):
         if not any([weight > 0, length > 0, hc > 0]):
             st.error("At least one measurement must be provided")
         else:
@@ -631,7 +645,7 @@ if not st.session_state.patient_data.empty:
             options=display_df.index, 
             format_func=format_measurement
         )
-        if st.button("➖ Remove Selected", use_container_width=True):
+        if st.button("➖ Remove Selected", width='stretch'):
             st.session_state.patient_data = st.session_state.patient_data.drop(index=row_to_remove).reset_index(drop=True)
             st.rerun()
 
@@ -661,11 +675,11 @@ if not st.session_state.patient_data.empty:
         data=csv,
         file_name=filename,
         mime='text/csv',
-        use_container_width=True
+        width='stretch'
     )
 
     # PDF Export
-    if col2.button("📄 Generate PDF Report", use_container_width=True):
+    if col2.button("📄 Generate PDF Report", width='stretch'):
         with st.spinner("Generating PDF..."):
             pdf = PDF('P', 'mm', 'A4')
             st.session_state['pdf_title'] = f"Growth Report for {patient_name}" if patient_name else "Growth Report"
