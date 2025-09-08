@@ -31,7 +31,9 @@ def create_full_chart(chart_data, config, metric=None, patient_data=None):
 
     # Create Figure with light theme
     fig = go.Figure()
-    fig.update_layout(template="plotly_white")
+    fig.update_layout(
+        template="plotly_white",
+    )
 
     # Define curves based on display mode
     if st.session_state.display_mode == 'Percentiles':
@@ -132,7 +134,8 @@ def create_full_chart(chart_data, config, metric=None, patient_data=None):
         legend_title="Legend",
         hovermode="x unified",
         margin=dict(l=20, r=20, t=40, b=20),
-        xaxis=dict(range=[24, 64]),
+        xaxis=dict(range=[24, 64], showgrid=True, dtick=1),
+        yaxis=dict(dtick=1),
         height=800
     )
 

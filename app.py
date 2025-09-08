@@ -61,7 +61,6 @@ if 'temp_patient_info' in st.session_state:
         st.session_state.birth_date = st.session_state.temp_patient_info['birth_date']
     if 'sex' in st.session_state.temp_patient_info:
         st.session_state.sex = st.session_state.temp_patient_info['sex']
-    del st.session_state['temp_patient_info']
 
 # --- UI: Sidebar ---
 with st.sidebar:
@@ -121,7 +120,7 @@ with st.sidebar:
         skip_processing = False
         if 'last_processed_file' in st.session_state and st.session_state.last_processed_file == original_filename:
             # Skip processing if we've already processed this file
-            st.info(f"File '{original_filename}' has already been processed.")
+            # st.info(f"File '{original_filename}' has already been processed.")
             skip_processing = True
             
         if not skip_processing:
@@ -150,24 +149,22 @@ with st.sidebar:
                     need_update = False
                     
                     # Create a new temp_patient_info dictionary
-                    new_temp_patient_info = {}
+                    temp_patient_info = {}
                     
                     if patient_info.get('name'):
-                        new_temp_patient_info['name'] = patient_info['name']
-                    if patient_info.get('birth_ga_weeks'):
-                        new_temp_patient_info['ga_weeks'] = patient_info['birth_ga_weeks']
-                    if patient_info.get('birth_ga_days'):
-                        new_temp_patient_info['ga_days'] = patient_info['birth_ga_days']
+                        temp_patient_info['name'] = patient_info['name']
+                    if patient_info.get('ga_weeks'):
+                        temp_patient_info['ga_weeks'] = patient_info['ga_weeks']
+                    if patient_info.get('ga_days'):
+                        temp_patient_info['ga_days'] = patient_info['ga_days']
                     if patient_info.get('birth_date'):
-                        new_temp_patient_info['birth_date'] = patient_info['birth_date']
+                        temp_patient_info['birth_date'] = patient_info['birth_date']
                     if patient_info.get('sex'):
-                        new_temp_patient_info['sex'] = patient_info['sex']
+                        temp_patient_info['sex'] = patient_info['sex']
                     
-                    # Check if the new info is different from what we already have
-                    if 'temp_patient_info' not in st.session_state or st.session_state.temp_patient_info != new_temp_patient_info:
-                        st.session_state.temp_patient_info = new_temp_patient_info
-                        st.success("Patient information loaded from filename!")
-                        st.rerun()
+                    st.session_state.temp_patient_info = temp_patient_info
+                    st.success("Patient information loaded from filename!")
+                    st.rerun()
 
     st.header("Add Measurement")
     
