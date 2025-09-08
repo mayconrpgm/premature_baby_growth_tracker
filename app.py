@@ -51,10 +51,16 @@ if 'sex' not in st.session_state:
 
 # Handle temp patient info if available
 if 'temp_patient_info' in st.session_state:
-    st.session_state.patient_name = st.session_state.temp_patient_info['name']
-    st.session_state.birth_ga_weeks = st.session_state.temp_patient_info['ga_weeks']
-    st.session_state.birth_ga_days = st.session_state.temp_patient_info['ga_days']
-    st.session_state.birth_date = st.session_state.temp_patient_info['birth_date']
+    if 'name' in st.session_state.temp_patient_info:
+        st.session_state.patient_name = st.session_state.temp_patient_info['name']
+    if 'ga_weeks' in st.session_state.temp_patient_info:
+        st.session_state.birth_ga_weeks = st.session_state.temp_patient_info['ga_weeks']
+    if 'ga_days' in st.session_state.temp_patient_info:
+        st.session_state.birth_ga_days = st.session_state.temp_patient_info['ga_days']
+    if 'birth_date' in st.session_state.temp_patient_info:
+        st.session_state.birth_date = st.session_state.temp_patient_info['birth_date']
+    if 'sex' in st.session_state.temp_patient_info:
+        st.session_state.sex = st.session_state.temp_patient_info['sex']
     del st.session_state['temp_patient_info']
 
 # --- UI: Sidebar ---
@@ -100,37 +106,68 @@ with st.sidebar:
 
     # Check for patient info in imported file if available
     if uploaded_file is not None:
-        # Save the uploaded file to a temporary location
+        # Save the uploaded file to a temporary location with original filename
         import tempfile
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.csv') as tmp_file:
-            tmp_file.write(uploaded_file.getvalue())
-            tmp_path = tmp_file.name
-        
-        # Process the saved file
-        patient_obj, error_msg = import_patient_data(tmp_path)
-        
-        # Clean up the temporary file
         import os
-        os.unlink(tmp_path)
         
-        if error_msg:
-            st.error(error_msg)
-        elif patient_obj is not None:
-            # Store the patient object's measurements in session state
-            st.session_state.patient_data = patient_obj.measurements
+        # Create a temporary directory
+        temp_dir = tempfile.mkdtemp()
+        
+        # Preserve the original filename
+        original_filename = uploaded_file.name
+        temp_file_path = os.path.join(temp_dir, original_filename)
+        
+        # Check if we've already processed this file
+        skip_processing = False
+        if 'last_processed_file' in st.session_state and st.session_state.last_processed_file == original_filename:
+            # Skip processing if we've already processed this file
+            st.info(f"File '{original_filename}' has already been processed.")
+            skip_processing = True
             
-            # Update patient info in session state if available       
-            st.session_state.patient_name = patient_obj.name
-            st.session_state.birth_ga_weeks = patient_obj.birth_ga_weeks
-            st.session_state.birth_ga_days = patient_obj.birth_ga_days
-            st.session_state.birth_date = patient_obj.birth_date
-            st.session_state.sex = patient_obj.sex
+        if not skip_processing:
+            # Save the file with its original name
+            with open(temp_file_path, 'wb') as tmp_file:
+                tmp_file.write(uploaded_file.getvalue())
             
-            st.success("Data imported successfully!")
+            # Process the saved file
+            patient_data, patient_info, error_msg = import_patient_data(temp_file_path)
             
-            # Patient info is now handled in the previous block
-            # No need to set temp_patient_info anymore
-            st.success("Patient information loaded from file!")
+            # Clean up the temporary file and directory
+            os.unlink(temp_file_path)
+            os.rmdir(temp_dir)
+            
+            # Store the filename we just processed
+            st.session_state.last_processed_file = original_filename
+
+            if error_msg:
+                st.error(error_msg)
+            elif not patient_data.empty:
+                st.session_state.patient_data = patient_data
+                st.success("Data imported successfully!")
+                
+                if patient_info:
+                    # Check if we need to update patient info
+                    need_update = False
+                    
+                    # Create a new temp_patient_info dictionary
+                    new_temp_patient_info = {}
+                    
+                    if patient_info.get('name'):
+                        new_temp_patient_info['name'] = patient_info['name']
+                    if patient_info.get('birth_ga_weeks'):
+                        new_temp_patient_info['ga_weeks'] = patient_info['birth_ga_weeks']
+                    if patient_info.get('birth_ga_days'):
+                        new_temp_patient_info['ga_days'] = patient_info['birth_ga_days']
+                    if patient_info.get('birth_date'):
+                        new_temp_patient_info['birth_date'] = patient_info['birth_date']
+                    if patient_info.get('sex'):
+                        new_temp_patient_info['sex'] = patient_info['sex']
+                    
+                    # Check if the new info is different from what we already have
+                    if 'temp_patient_info' not in st.session_state or st.session_state.temp_patient_info != new_temp_patient_info:
+                        st.session_state.temp_patient_info = new_temp_patient_info
+                        st.success("Patient information loaded from filename!")
+                        st.rerun()
 
     st.header("Add Measurement")
     
@@ -258,20 +295,19 @@ for tab, metric_key in [
             (data['ga'] <= 64)
         ]
         
-        # Get patient data for this metric if available
-        patient_metric_data = None
-        if 'patient_obj' in st.session_state and st.session_state.patient_obj is not None:
-            patient_metric_data = st.session_state.patient_obj.get_measurement_series(metric_key)
-            
         if not chart_data.empty:
+            # Filter patient data for this metric to only include rows with non-null values for this metric
+            patient_metric_data = st.session_state.patient_data[
+                st.session_state.patient_data[config['data_col']].notnull()
+            ].copy() if not st.session_state.patient_data.empty else None
+            
             create_full_chart(chart_data, config, metric=metric_key, patient_data=patient_metric_data)
 
 # --- Data Table and Export ---
 st.header("Patient Measurement History")
 
-if 'patient_obj' in st.session_state and st.session_state.patient_obj is not None:
-    # Get measurements formatted for chart display
-    display_df = st.session_state.patient_obj.get_measurements_for_chart()
+if not st.session_state.patient_data.empty:
+    display_df = st.session_state.patient_data.copy()
     
     # Calculate derived values for the table
     birth_date_dt = datetime.combine(st.session_state.birth_date, datetime.min.time())
@@ -342,7 +378,7 @@ if 'patient_obj' in st.session_state and st.session_state.patient_obj is not Non
     # Display the dataframe without index
     st.dataframe(
         display_df[display_columns].style.format({col: "{}".format for col in display_columns}),
-        use_container_width=True,
+        width='stretch',
         hide_index=True
     )
 

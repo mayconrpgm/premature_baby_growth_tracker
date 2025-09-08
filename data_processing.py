@@ -152,15 +152,14 @@ def prepare_export_dataframe(patient_data):
 
 def import_patient_data(file_path):
     """
-    Imports patient data from a CSV file and returns a Patient object.
+    Imports patient data from a CSV file.
     
     Args:
         file_path: Path to the CSV file
         
     Returns:
-        Tuple of (patient_object or None, error_message or None)
+        Tuple of (patient_data_df, patient_info_dict or None, error_message or None)
     """
-    from patient import Patient
     try:
         # Try to extract patient info from filename
         patient_info = None
@@ -169,7 +168,18 @@ def import_patient_data(file_path):
             # Extract patient info from filename
             name_part = filename.split('_GA')[0]
             ga_part = filename.split('_GA')[1].split('_DOB')[0]
-            dob_part = filename.split('_DOB')[1].split('.csv')[0]
+            dob_part = filename.split('_DOB')[1]
+            
+            # Check if sex is included in the filename
+            sex = None
+            if '_M.csv' in dob_part:
+                sex = "Male"
+                dob_part = dob_part.split('_M.csv')[0]
+            elif '_F.csv' in dob_part:
+                sex = "Female"
+                dob_part = dob_part.split('_F.csv')[0]
+            else:
+                dob_part = dob_part.split('.csv')[0]
             
             # Parse GA
             ga_weeks = int(ga_part.split('w')[0])
@@ -185,13 +195,17 @@ def import_patient_data(file_path):
                 'ga_days': ga_days,
                 'birth_date': birth_date
             }
+            
+            # Add sex if available
+            if sex:
+                patient_info['sex'] = sex
         
         imported_df = pd.read_csv(file_path)
         required_columns = ['PMA', 'Date', 'Weight', 'Length', 'HC']
         
         if not all(col in imported_df.columns for col in required_columns):
             error_msg = "CSV must contain columns: PMA, Date, Weight, Length, HC"
-            return None, patient_info, error_msg
+            return pd.DataFrame(), patient_info, error_msg
         
         # Process the imported data
         patient_data = pd.DataFrame(columns=[
@@ -221,31 +235,7 @@ def import_patient_data(file_path):
             .reset_index(drop=True)
         )
         
-        # Create a Patient object
-        if patient_info:
-            patient_obj = Patient(
-                name=patient_info.get('name', ''),
-                birth_ga_weeks=patient_info.get('ga_weeks', 32),
-                birth_ga_days=patient_info.get('ga_days', 0),
-                birth_date=patient_info.get('birth_date'),
-                sex=patient_info.get('sex', 'Male')
-            )
-        else:
-            # Create a default Patient object if no info was extracted
-            patient_obj = Patient()
-            
-        # Add all measurements to the Patient object
-        for _, row in patient_data.iterrows():
-            patient_obj.add_measurement(
-                pma_weeks=row['pma_weeks'],
-                pma_days=row['pma_days'],
-                measurement_date=row['measurement_date'],
-                weight=row['weight'],
-                length=row['length'],
-                hc=row['hc']
-            )
-        
-        return patient_obj, None
+        return patient_data, patient_info, None
     except Exception as e:
         error_msg = f"Error importing data: {str(e)}"
-        return None, error_msg
+        return pd.DataFrame(), None, error_msg
