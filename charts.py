@@ -1,11 +1,10 @@
-"""Growth chart creation and visualization functions."""
+"""Chart creation and visualization functions for growth charts."""
 
 import streamlit as st
 import plotly.graph_objects as go
 import numpy as np
 from sklearn.linear_model import LinearRegression
 
-# Debug function
 def debug_print(*args, **kwargs):
     """Prints debug information if debug mode is enabled."""
     if st.session_state.debug_mode:
@@ -15,14 +14,17 @@ def pma_to_decimal_weeks(weeks, days):
     """Converts PMA from (weeks, days) to decimal weeks."""
     return weeks + days / 7
 
-# Function to create a single growth chart
-def create_full_chart(chart_data, config, metric=None):
+def create_full_chart(chart_data, config, metric=None, patient_data=None):
     """Creates a growth chart with specified metric and configuration.
     
     Args:
         chart_data: DataFrame containing the reference data
         config: Dictionary containing chart configuration
         metric: Optional string specifying the metric ('weight', 'length', or 'hc')
+        patient_data: Optional DataFrame containing patient measurements for this metric
+    
+    Returns:
+        Plotly figure object
     """
     # Use provided metric or extract from config
     debug_print("Debug - Creating chart for metric:", metric)
@@ -62,10 +64,8 @@ def create_full_chart(chart_data, config, metric=None):
             ))
 
     # Add patient data if available
-    if not st.session_state.patient_data.empty:
-        patient_df = st.session_state.patient_data[
-            st.session_state.patient_data[config['data_col']].notnull()
-        ].copy()
+    if patient_data is not None and not patient_data.empty:
+        patient_df = patient_data.copy()
         
         if not patient_df.empty:
             patient_df['pma_decimal'] = patient_df.apply(
@@ -140,3 +140,29 @@ def create_full_chart(chart_data, config, metric=None):
     st.plotly_chart(fig, use_container_width=True)
     
     return fig  # Return the figure for potential reuse
+
+def create_chart_tab(tab, metric_key, metric_configs, data):
+    """Creates a chart for a given metric in the specified tab.
+    
+    Args:
+        tab: Streamlit tab object
+        metric_key: String key for the metric ('weight', 'length', or 'hc')
+        metric_configs: Dictionary of metric configurations
+        data: DataFrame containing reference data
+    """
+    config = metric_configs[metric_key]
+    
+    # Map interface values to dataframe values
+    sex_map = {"Male": "Boy", "Female": "Girl"}
+    
+    # Filter data for this metric
+    selected_sex = sex_map[st.session_state.sex]
+    metric_data = data[(data['sex'] == selected_sex) & 
+                      (data['param'] == config['db_name']) & 
+                      (data['ga'] <= 64)]
+    
+    if not metric_data.empty:
+        # Create figure with the metric key using imported function
+        create_full_chart(metric_data, config, metric=metric_key)
+    else:
+        st.info(f"No {config['display_name']} data available for the selected criteria.")
