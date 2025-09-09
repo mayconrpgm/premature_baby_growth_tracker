@@ -4,6 +4,8 @@ from fpdf import FPDF
 import base64
 from datetime import datetime
 import pandas as pd
+import tempfile
+import os
 from util import format_age, calculate_chronological_age_days, calculate_corrected_age_days
 
 class PDF(FPDF):
@@ -41,6 +43,30 @@ class PDF(FPDF):
                 self.cell(col_widths[i], 6, str(item), 1, 0, 'C')
             self.ln()
 
+    def add_chart_image(self, fig, title):
+        """Add a chart image to the PDF.
+        
+        Args:
+            fig: Plotly figure object
+            title: Chart title
+        """
+        # Create a temporary file for the image
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as tmp:
+            # Save the figure as an image
+            fig.write_image(tmp.name, width=700, height=850)
+            
+            # Add the title
+            self.set_font('Arial', 'B', 12)
+            self.cell(0, 10, title, 0, 1, 'L')
+            
+            # Add the image to the PDF
+            self.image(tmp.name, x=10, y=None, w=190)
+            self.ln(5)
+            
+            # Clean up the temporary file
+            tmp.close()
+            os.unlink(tmp.name)
+
 def create_download_link(val, filename, link_text):
     """Generates a download link for a file.
     
@@ -55,7 +81,7 @@ def create_download_link(val, filename, link_text):
     b64 = base64.b64encode(val)
     return f'<a href="data:application/octet-stream;base64,{b64.decode()}" download="{filename}">{link_text}</a>'
 
-def generate_pdf_report(patient_data, patient_name, birth_ga_weeks, birth_ga_days, birth_date, sex):
+def generate_pdf_report(patient_data, patient_name, birth_ga_weeks, birth_ga_days, birth_date, sex, chart_figures):
     """Generate a PDF report for the patient's growth data.
     
     Args:
@@ -125,6 +151,16 @@ def generate_pdf_report(patient_data, patient_name, birth_ga_weeks, birth_ga_day
         table_data.append(row_data)
     
     pdf.summary_table(table_header, table_data)
+
+    # Add growth charts (one per page)
+    for metric, fig in chart_figures.items():
+        pdf.add_page()
+        title = {
+            'weight': 'Weight Growth Chart',
+            'length': 'Length Growth Chart',
+            'hc': 'Head Circumference Growth Chart'
+        }.get(metric, 'Growth Chart')
+        pdf.add_chart_image(fig, title)
     
     # Get PDF bytes
     pdf_bytes = pdf.output(dest='S')

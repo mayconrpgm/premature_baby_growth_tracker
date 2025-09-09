@@ -136,6 +136,13 @@ def create_full_chart(chart_data, config, metric=None, patient_data=None):
         margin=dict(l=20, r=20, t=40, b=20),
         xaxis=dict(range=[24, 64], showgrid=True, dtick=1),
         yaxis=dict(dtick=1),
+        legend=dict(
+            yanchor="bottom",
+            y=0.01,
+            xanchor="right",
+            x=0.99,
+            orientation="h"
+        ),
         height=800
     )
 

@@ -270,6 +270,8 @@ metric_configs = {
     }
 }
 
+st.session_state.chart_figures = {}
+
 # Create the charts in each tab
 for tab, metric_key in [
     (weight_tab, "weight"),
@@ -298,7 +300,10 @@ for tab, metric_key in [
                 st.session_state.patient_data[config['data_col']].notnull()
             ].copy() if not st.session_state.patient_data.empty else None
             
-            create_full_chart(chart_data, config, metric=metric_key, patient_data=patient_metric_data)
+            fig = create_full_chart(chart_data, config, metric=metric_key, patient_data=patient_metric_data)
+
+            st.session_state.chart_figures[metric_key] = fig
+
 
 # --- Data Table and Export ---
 st.header("Patient Measurement History")
@@ -410,6 +415,7 @@ if not st.session_state.patient_data.empty:
     filename = (f"{patient_name or 'patient'}"
                f"_GA{st.session_state.birth_ga_weeks}w{st.session_state.birth_ga_days}d"
                f"_DOB{st.session_state.birth_date.strftime('%Y%m%d')}"
+               f"_{'M' if st.session_state.sex == 'Male' else 'F'}"
                f".csv")
     
     csv = export_df.to_csv(index=False).encode('utf-8')
@@ -430,7 +436,8 @@ if not st.session_state.patient_data.empty:
                 st.session_state.birth_ga_weeks,
                 st.session_state.birth_ga_days,
                 st.session_state.birth_date,
-                st.session_state.sex
+                st.session_state.sex,
+                st.session_state.chart_figures
             )
             
             st.markdown(
