@@ -3,18 +3,15 @@
 import streamlit as st
 import plotly.graph_objects as go
 import numpy as np
+import pandas as pd
 from sklearn.linear_model import LinearRegression
+from typing import Dict, List, Tuple, Optional, Union, Any
+from util import debug_print, pma_to_decimal_weeks
 
-def debug_print(*args, **kwargs):
-    """Prints debug information if debug mode is enabled."""
-    if st.session_state.debug_mode:
-        st.write(*args, **kwargs)
-
-def pma_to_decimal_weeks(weeks, days):
-    """Converts PMA from (weeks, days) to decimal weeks."""
-    return weeks + days / 7
-
-def create_full_chart(chart_data, config, metric=None, patient_data=None):
+def create_full_chart(chart_data: pd.DataFrame, 
+                   config: Dict[str, Any], 
+                   metric: Optional[str] = None, 
+                   patient_data: Optional[pd.DataFrame] = None) -> go.Figure:
     """Creates a growth chart with specified metric and configuration.
     
     Args:

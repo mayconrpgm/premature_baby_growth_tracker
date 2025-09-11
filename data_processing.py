@@ -5,14 +5,16 @@ import numpy as np
 from datetime import datetime
 import os
 import math
+from typing import Dict, List, Tuple, Optional, Union, Any
 
 # --- Data Loading and Processing ---
-def load_intergrowth_data():
+def load_intergrowth_data() -> Tuple[pd.DataFrame, Optional[str]]:
     """Loads and processes the INTERGROWTH-21st data.
     
     Returns:
-        DataFrame: Processed data or empty DataFrame if error occurs
-        str: Error message if any, None otherwise
+        Tuple containing:
+            - DataFrame: Processed data or empty DataFrame if error occurs
+            - Optional[str]: Error message if any, None otherwise
     """
     try:
         # Updated path to the data folder
@@ -83,7 +85,7 @@ def load_intergrowth_data():
         error_msg = f"An error occurred while processing the data file: {e}\nPlease ensure the CSV has columns like 'sex', 'metric', 'measurement_type', 'age_weeks', and 'value'."
         return pd.DataFrame(), error_msg
 
-def get_z_score_and_percentile(pma_decimal, value, sex, metric, df):
+def get_z_score_and_percentile(pma_decimal: float, value: float, sex: str, metric: str, df: pd.DataFrame) -> Tuple[float, float]:
     """
     Calculates the Z-score and estimated percentile for a given measurement.
     This is a simplified estimation by interpolating between the nearest curves.
@@ -96,6 +98,9 @@ def get_z_score_and_percentile(pma_decimal, value, sex, metric, df):
         df: DataFrame containing reference data
         
     Returns:
+        Tuple containing:
+            - float: Estimated Z-score
+            - float: Estimated percentile
         Tuple of (z_score, percentile)
     """
     if df.empty or pma_decimal is None or value is None:

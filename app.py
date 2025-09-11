@@ -8,10 +8,10 @@ import base64
 
 # Import custom modules
 from data_processing import load_intergrowth_data, get_z_score_and_percentile, prepare_export_dataframe, import_patient_data
-from charts import create_full_chart, debug_print
+from charts import create_full_chart
 from pdf_export import generate_pdf_report, create_download_link
 from patient import Patient
-from util import pma_to_decimal_weeks, decimal_weeks_to_pma, calculate_chronological_age_days, format_age, calculate_corrected_age_days, calculate_pma_from_date
+from util import pma_to_decimal_weeks, decimal_weeks_to_pma, calculate_chronological_age_days, format_age, calculate_corrected_age_days, calculate_pma_from_date, debug_print
 
 # --- Page Configuration ---
 st.set_page_config(
@@ -210,30 +210,40 @@ with st.sidebar:
 # Instructions at the top
 with st.expander("Instructions", expanded=False):
     st.markdown("""
-    1.  **Enter Patient Info**: Fill in the patient's birth gestational age (GA), birth date, and sex in the sidebar.
+    ### Using the INTERGROWTH-21st Preterm Growth Tracker
     
-    2.  **Adding Measurements**:
-        - Use the "Calculate PMA from Date" toggle for automatic Postmenstrual Age (PMA) calculation.
-        - Or, enter the PMA manually.
-        - Input one or more measurements (Weight, Length, Head Circumference).
-        - Click "Add Measurement".
+    1.  **Enter Patient Information**: 
+        - Fill in the patient's name (optional)
+        - Enter birth gestational age (GA) in weeks and days
+        - Select birth date using the date picker
+        - Choose the patient's sex (Male/Female)
     
-    3.  **Import/Export Data**:
+    2.  **Adding Growth Measurements**:
+        - Toggle "Calculate PMA from Date" ON for automatic Postmenstrual Age (PMA) calculation based on birth GA and measurement date
+        - Toggle OFF to manually enter PMA in weeks and days
+        - Input one or more measurements (Weight in kg, Length in cm, Head Circumference in cm)
+        - Click "Add Measurement" to record the data point
+    
+    3.  **Importing and Exporting Data**:
         - **Import**: Upload a previously exported CSV file to restore patient data, including:
-          * Patient information (Name, Birth GA, Birth Date)
+          * Patient information (Name, Birth GA, Birth Date, Sex)
           * All recorded measurements
-          * The CSV must have columns: PMA, Date, Weight, Length, HC
-        - **Export**: 
+          * The CSV must have columns: PMA_weeks, PMA_days, measurement_date, weight, length, hc
+        - **Export Options**: 
           * CSV Export: Downloads all data in a format compatible with the import function
-          * PDF Export: Generates a complete report with patient info, charts, and measurements
+          * PDF Export: Generates a complete clinical report with patient info, growth charts, and measurement table
     
-    4.  **View Charts**: 
-        - Charts update automatically with each new data point
-        - Switch between Percentiles and Z-Scores views
+    4.  **Viewing Growth Charts**: 
+        - Charts update automatically with each new measurement
+        - Switch between Percentiles and Z-Scores views using the radio button
+        - Each tab shows a different growth parameter (Weight, Length, Head Circumference)
+        - Patient measurements appear as points on the chart
     
-    5.  **Manage Data**: 
-        - View all measurements in the table below the charts
-        - Remove individual measurements if needed
+    5.  **Managing Measurement Data**: 
+        - All measurements appear in the table below the charts
+        - Sort by clicking column headers
+        - Remove individual measurements using the "Delete" button if needed
+        - Clear all data using the "Clear All Data" button in the sidebar
     """)
 
 # Create tabs for different measurements
@@ -452,4 +462,10 @@ if not st.session_state.patient_data.empty:
 else:
     st.info("No measurements added yet. Use the sidebar to add data points.")
 
-st.markdown("<div style='text-align: center; color: grey;'>Developed for clinical support based on INTERGROWTH-21st data.</div>", unsafe_allow_html=True)
+# Footer with attribution and links
+st.markdown("""
+<div style='text-align: center; color: grey; padding: 20px;'>
+    <p>Based on data from <a href='https://intergrowth21.ndog.ox.ac.uk/preterm/' target='_blank'>INTERGROWTH-21st Preterm Growth Standards</a></p>
+    <p>Developed by Maycon Queiros | <a href='https://github.com/mayconrpgm/preterm_baby_growth_tracker' target='_blank'>Source Code on GitHub</a></p>
+</div>
+""", unsafe_allow_html=True)

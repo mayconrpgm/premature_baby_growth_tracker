@@ -1,8 +1,20 @@
 """Utility functions for the growth chart application."""
 
 from datetime import datetime, timedelta
+import streamlit as st
+from typing import Any, Dict, List, Tuple, Optional, Union
 
-def pma_to_decimal_weeks(weeks, days):
+def debug_print(*args: Any, **kwargs: Any) -> None:
+    """Prints debug information if debug mode is enabled.
+    
+    Args:
+        *args: Variable length argument list to print
+        **kwargs: Arbitrary keyword arguments to pass to st.write
+    """
+    if st.session_state.debug_mode:
+        st.write(*args, **kwargs)
+
+def pma_to_decimal_weeks(weeks: int, days: int) -> float:
     """Converts PMA from (weeks, days) to decimal weeks.
     
     Args:
@@ -14,7 +26,7 @@ def pma_to_decimal_weeks(weeks, days):
     """
     return weeks + days / 7
 
-def decimal_weeks_to_pma(decimal_weeks):
+def decimal_weeks_to_pma(decimal_weeks: float) -> Tuple[int, int]:
     """Converts decimal weeks to PMA (weeks, days).
     
     Args:
@@ -27,7 +39,8 @@ def decimal_weeks_to_pma(decimal_weeks):
     days = int(round((decimal_weeks - weeks) * 7))
     return weeks, days
 
-def calculate_chronological_age_days(birth_date, measurement_date):
+def calculate_chronological_age_days(birth_date: Union[datetime, datetime.date], 
+                                    measurement_date: Union[datetime, datetime.date]) -> int:
     """Calculates chronological age in days.
     
     Args:
@@ -37,11 +50,11 @@ def calculate_chronological_age_days(birth_date, measurement_date):
     Returns:
         Integer days of age
     """
-    if isinstance(birth_date, datetime) and isinstance(measurement_date, datetime):
+    if isinstance(birth_date, (datetime, datetime.date)) and isinstance(measurement_date, (datetime, datetime.date)):
         return (measurement_date - birth_date).days
     return 0
 
-def format_age(days):
+def format_age(days: Union[int, float]) -> str:
     """Formats age in months and days for display.
     
     Args:
@@ -56,7 +69,10 @@ def format_age(days):
         return f"{months}m {remaining_days}d"
     return "N/A"
 
-def calculate_corrected_age_days(birth_date, measurement_date, birth_ga_weeks, birth_ga_days):
+def calculate_corrected_age_days(birth_date: Union[datetime, datetime.date],
+                               measurement_date: Union[datetime, datetime.date],
+                               birth_ga_weeks: int,
+                               birth_ga_days: int) -> Optional[float]:
     """Calculates corrected age in days.
     
     Args:
@@ -66,9 +82,9 @@ def calculate_corrected_age_days(birth_date, measurement_date, birth_ga_weeks, b
         birth_ga_days: Integer days of gestational age at birth
         
     Returns:
-        Integer days of corrected age
+        Float days of corrected age or None if calculation not possible
     """
-    if isinstance(birth_date, datetime) and isinstance(measurement_date, datetime):
+    if isinstance(birth_date, (datetime, datetime.date)) and isinstance(measurement_date, (datetime, datetime.date)):
         chronological_days = (measurement_date - birth_date).days
         # Calculate weeks to full term (40 weeks)
         weeks_to_term = 40 - (birth_ga_weeks + birth_ga_days/7)
@@ -77,7 +93,9 @@ def calculate_corrected_age_days(birth_date, measurement_date, birth_ga_weeks, b
         return corrected_days if corrected_days >= 0 else 0
     return None
 
-def calculate_pma_from_date(birth_ga_decimal, birth_date, measurement_date):
+def calculate_pma_from_date(birth_ga_decimal: float, 
+                          birth_date: Union[datetime, datetime.date], 
+                          measurement_date: Union[datetime, datetime.date]) -> float:
     """Calculates PMA in decimal weeks from dates.
     
     Args:
