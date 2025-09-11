@@ -230,7 +230,11 @@ def import_patient_data(file_path):
                 'length': row['Length'] if pd.notna(row['Length']) else None,
                 'hc': row['HC'] if pd.notna(row['HC']) else None
             }
-            patient_data = pd.concat([patient_data, pd.DataFrame([new_data])], ignore_index=True)
+            # Create a new DataFrame with the row data and ensure it has the same structure
+            new_row_df = pd.DataFrame([new_data])
+            # Only concatenate if the new row has valid data
+            if not new_row_df.empty:
+                patient_data = pd.concat([patient_data, new_row_df], ignore_index=True)
         
         # Sort and remove duplicates
         patient_data = (

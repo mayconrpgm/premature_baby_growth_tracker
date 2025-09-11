@@ -88,12 +88,13 @@ def create_full_chart(chart_data: pd.DataFrame,
             # Add trendline if there are at least 2 points
             if len(patient_df) >= 2:
                 model = LinearRegression()
-                X = patient_df[['pma_decimal']]
+                X = patient_df[['pma_decimal']].values  # Use values to avoid feature names warning
                 y = patient_df[config['data_col']]
                 model.fit(X, y)
                 
                 last_pma = patient_df['pma_decimal'].max()
                 projection_pma = np.array([[last_pma], [last_pma + 4]])
+                # Use numpy array directly for prediction to avoid feature names warning
                 projection_values = model.predict(projection_pma)
 
                 fig.add_trace(go.Scatter(
