@@ -12,6 +12,8 @@ from charts import create_full_chart
 from pdf_export import generate_pdf_report, create_download_link
 from patient import Patient
 from util import pma_to_decimal_weeks, decimal_weeks_to_pma, calculate_chronological_age_days, format_age, calculate_corrected_age_days, calculate_pma_from_date, debug_print
+from translations import get_translation, LANGUAGE_OPTIONS
+from language_utils import initialize_language, save_language_preference, show_cookie_consent
 
 # --- Page Configuration ---
 st.set_page_config(
@@ -20,6 +22,9 @@ st.set_page_config(
     initial_sidebar_state="expanded",
     layout="wide"
 )
+
+# --- Language Initialization ---
+language_code = initialize_language()
 
 # Enable/Disable debug mode
 if 'debug_mode' not in st.session_state:
@@ -43,11 +48,14 @@ if 'birth_ga_days' not in st.session_state:
 if 'birth_date' not in st.session_state:
     st.session_state.birth_date = datetime.now().date() - timedelta(days=30)
 if 'display_mode' not in st.session_state:
-    st.session_state.display_mode = "Percentiles"
+    st.session_state.display_mode = get_translation('percentiles_option', language_code)
 if 'patient_name' not in st.session_state:
     st.session_state.patient_name = ""
 if 'sex' not in st.session_state:
-    st.session_state.sex = "Male"
+    st.session_state.sex = get_translation("male_option", language_code)
+
+# --- Cookie Consent Banner ---
+cookie_accepted = show_cookie_consent()
 
 # Handle temp patient info if available
 if 'temp_patient_info' in st.session_state:
@@ -64,35 +72,55 @@ if 'temp_patient_info' in st.session_state:
 
 # --- UI: Sidebar ---
 with st.sidebar:
-    st.title("👶 Preterm Growth Tracker")
+    st.title(f"👶 {get_translation('app_title', language_code)}")
+    
+    # Language selector
+    selected_language = st.selectbox(
+        get_translation('language_selector', language_code),
+        options=list(LANGUAGE_OPTIONS.keys()),
+        format_func=lambda x: x,
+        index=list(LANGUAGE_OPTIONS.values()).index(language_code)
+    )
+    
+    # Update language if changed
+    if LANGUAGE_OPTIONS[selected_language] != language_code:
+        language_code = LANGUAGE_OPTIONS[selected_language]
+        st.session_state.language_code = language_code
+        if cookie_accepted:
+            save_language_preference(language_code)
+        st.rerun()
     
     # Debug mode toggle
-    st.session_state.debug_mode = st.toggle("Debug Mode", value=st.session_state.debug_mode)
+    st.session_state.debug_mode = st.toggle(get_translation('debug_mode', language_code), value=st.session_state.debug_mode)
     
-    st.header("Patient Information")
+    st.header(get_translation('patient_information', language_code))
 
     # CSV File Upload - Moved higher
     uploaded_file = st.file_uploader(
-        "Import data from CSV",
+        get_translation('import_csv', language_code),
         type=['csv'],
         key="measurement_csv_upload",
-        help="Upload a CSV file containing measurements. The file should have columns: PMA, Date, Weight, Length, HC"
+        help=get_translation('import_csv_help', language_code)
     )
 
     # Use key only, don't set value from session_state when key is the same
-    patient_name = st.text_input("Patient Name (Optional for PDF)", key="patient_name")
+    patient_name = st.text_input(get_translation('patient_name', language_code), key="patient_name")
     
     c1, c2 = st.columns(2)
     with c1:
         # Use key only, don't set value from session_state when key is the same
-        birth_ga_weeks = st.number_input("Birth GA (weeks)", min_value=22, max_value=42, step=1, key="birth_ga_weeks")
+        birth_ga_weeks = st.number_input(get_translation('birth_ga_weeks', language_code), min_value=22, max_value=42, step=1, key="birth_ga_weeks")
     with c2:
-        birth_ga_days = st.number_input("(days)", min_value=0, max_value=6, step=1, key="birth_ga_days")
+        birth_ga_days = st.number_input(get_translation('birth_ga_days', language_code), min_value=0, max_value=6, step=1, key="birth_ga_days")
     
     # Use key only, don't set value from session_state when key is the same
-    birth_date = st.date_input("Birth Date", key="birth_date")
+    birth_date = st.date_input(get_translation('birth_date', language_code), key="birth_date")
     # Use key only, don't set index from session_state when key is the same
-    sex = st.selectbox("Sex", ("Male", "Female"), key="sex")
+    sex = st.selectbox(
+        get_translation('sex', language_code), 
+        (get_translation('male_option', language_code), get_translation('female_option', language_code)), 
+        key="sex"
+    )
     
     metric_map = {
         "Weight_kg": "weight",
@@ -101,7 +129,11 @@ with st.sidebar:
     }
     reverse_metric_map = {v: k for k, v in metric_map.items()}
     # Use key only, don't set index from session_state when key is the same
-    display_mode = st.radio("Display Curves", ("Percentiles", "Z-Scores"), key="display_mode")
+    display_mode = st.radio(
+        get_translation('display_curves', language_code), 
+        (get_translation('percentiles_option', language_code), get_translation('z_scores_option', language_code)), 
+        key="display_mode"
+    )
 
     # Check for patient info in imported file if available
     if uploaded_file is not None:
@@ -166,33 +198,33 @@ with st.sidebar:
                     st.success("Patient information loaded from filename!")
                     st.rerun()
 
-    st.header("Add Measurement")
+    st.header(get_translation('add_measurement', language_code))
     
-    use_date_for_pma = st.toggle("Calculate PMA from Date", value=True)
+    use_date_for_pma = st.toggle(get_translation('calculate_pma_from_date', language_code), value=True)
 
     if use_date_for_pma:
-        meas_date = st.date_input("Measurement Date", value=datetime.now().date())
+        meas_date = st.date_input(get_translation('measurement_date', language_code), value=datetime.now().date())
         birth_ga_decimal = pma_to_decimal_weeks(st.session_state.birth_ga_weeks, st.session_state.birth_ga_days)
         pma_decimal_calc = calculate_pma_from_date(birth_ga_decimal, datetime.combine(st.session_state.birth_date, datetime.min.time()), datetime.combine(meas_date, datetime.min.time()))
         pma_w_calc, pma_d_calc = decimal_weeks_to_pma(pma_decimal_calc)
-        st.info(f"Calculated PMA: {pma_w_calc} weeks + {pma_d_calc} days")
+        st.info(get_translation('calculated_pma', language_code).format(weeks=pma_w_calc, days=pma_d_calc))
         meas_pma_weeks, meas_pma_days = pma_w_calc, pma_d_calc
     else:
         c3, c4 = st.columns(2)
-        meas_pma_weeks = c3.number_input("PMA (weeks)", min_value=st.session_state.birth_ga_weeks, max_value=64, step=1)
-        meas_pma_days = c4.number_input("PMA (days)", min_value=0, max_value=6, step=1)
+        meas_pma_weeks = c3.number_input(get_translation('pma_weeks', language_code), min_value=st.session_state.birth_ga_weeks, max_value=64, step=1)
+        meas_pma_days = c4.number_input(get_translation('pma_days', language_code), min_value=0, max_value=6, step=1)
         meas_date = None
 
     # Measurement inputs
-    st.subheader("Measurements")
+    st.subheader(get_translation('measurements', language_code))
             
-    weight = st.number_input("Weight (kg)", min_value=0.0, step=0.001, format="%.3f", key="weight")
-    length = st.number_input("Length (cm)", min_value=0.0, step=0.1, format="%.1f", key="length")
-    hc = st.number_input("Head Circumference (cm)", min_value=0.0, step=0.1, format="%.1f", key="hc")
+    weight = st.number_input(get_translation('weight_kg', language_code), min_value=0.0, step=0.001, format="%.3f", key="weight")
+    length = st.number_input(get_translation('length_cm', language_code), min_value=0.0, step=0.1, format="%.1f", key="length")
+    hc = st.number_input(get_translation('head_circumference_cm', language_code), min_value=0.0, step=0.1, format="%.1f", key="hc")
 
-    if st.button("➕ Add Measurement", width='stretch'):
+    if st.button(f"➕ {get_translation('add_measurement_button', language_code)}", width='stretch'):
         if not any([weight > 0, length > 0, hc > 0]):
-            st.error("At least one measurement must be provided")
+            st.error(get_translation('measurement_required_error', language_code))
         else:
             new_data = {
                 'pma_weeks': meas_pma_weeks,
@@ -208,74 +240,46 @@ with st.sidebar:
 # --- Main Panel ---
 
 # Instructions at the top
-with st.expander("Instructions", expanded=False):
-    st.markdown("""
-    ### Using the INTERGROWTH-21st Preterm Growth Tracker
-    
-    1.  **Enter Patient Information**: 
-        - Fill in the patient's name (optional)
-        - Enter birth gestational age (GA) in weeks and days
-        - Select birth date using the date picker
-        - Choose the patient's sex (Male/Female)
-    
-    2.  **Adding Growth Measurements**:
-        - Toggle "Calculate PMA from Date" ON for automatic Postmenstrual Age (PMA) calculation based on birth GA and measurement date
-        - Toggle OFF to manually enter PMA in weeks and days
-        - Input one or more measurements (Weight in kg, Length in cm, Head Circumference in cm)
-        - Click "Add Measurement" to record the data point
-    
-    3.  **Importing and Exporting Data**:
-        - **Import**: Upload a previously exported CSV file to restore patient data, including:
-          * Patient information (Name, Birth GA, Birth Date, Sex)
-          * All recorded measurements
-          * The CSV must have columns: PMA_weeks, PMA_days, measurement_date, weight, length, hc
-        - **Export Options**: 
-          * CSV Export: Downloads all data in a format compatible with the import function
-          * PDF Export: Generates a complete clinical report with patient info, growth charts, and measurement table
-    
-    4.  **Viewing Growth Charts**: 
-        - Charts update automatically with each new measurement
-        - Switch between Percentiles and Z-Scores views using the radio button
-        - Each tab shows a different growth parameter (Weight, Length, Head Circumference)
-        - Patient measurements appear as points on the chart
-    
-    5.  **Managing Measurement Data**: 
-        - All measurements appear in the table below the charts
-        - Sort by clicking column headers
-        - Remove individual measurements using the "Delete" button if needed
-        - Clear all data using the "Clear All Data" button in the sidebar
-    """)
+with st.expander(get_translation('instructions', language_code), expanded=False):
+    st.markdown(get_translation('instructions_content', language_code))
 
 # Create tabs for different measurements
-weight_tab, length_tab, hc_tab = st.tabs(["Weight", "Length", "Head Circumference"])
+weight_tab, length_tab, hc_tab = st.tabs([
+    get_translation('weight_tab', language_code),
+    get_translation('length_tab', language_code),
+    get_translation('head_circumference_tab', language_code)
+])
 
 # Map interface values to dataframe values
-sex_map = {"Male": "Boy", "Female": "Girl"}
+sex_map = {
+    get_translation('male_option', language_code): "Boy", 
+    get_translation('female_option', language_code): "Girl"
+}
 
 # Mapping for metrics
 metric_configs = {
     "weight": {
-        "display_name": "Weight",
-        "unit": "kg",
+        "display_name": get_translation('weight_display', language_code),
+        "unit": get_translation('kg_unit', language_code),
         "db_name": "Weight_kg",
         "format": ":.3f",
-        "y_axis_title": "Weight (kg)",
+        "y_axis_title": get_translation('weight_axis_title', language_code),
         "data_col": "weight"
     },
     "length": {
-        "display_name": "Length",
-        "unit": "cm",
+        "display_name": get_translation('length_display', language_code),
+        "unit": get_translation('cm_unit', language_code),
         "db_name": "Length_cm",
         "format": ":.1f",
-        "y_axis_title": "Length (cm)",
+        "y_axis_title": get_translation('length_axis_title', language_code),
         "data_col": "length"
     },
     "hc": {
-        "display_name": "Head Circumference",
-        "unit": "cm",
+        "display_name": get_translation('hc_display', language_code),
+        "unit": get_translation('cm_unit', language_code),
         "db_name": "Head_Circumference_cm",
         "format": ":.1f",
-        "y_axis_title": "Head Circumference (cm)",
+        "y_axis_title": get_translation('hc_axis_title', language_code),
         "data_col": "hc"
     }
 }
@@ -290,7 +294,10 @@ for tab, metric_key in [
 ]:
     with tab:
         config = metric_configs[metric_key]
-        st.header(f"{config['display_name']} Growth Chart: {st.session_state.sex}")
+        st.header(get_translation('growth_chart_header', language_code).format(
+            metric=config['display_name'], 
+            sex=st.session_state.sex
+        ))
         selected_sex = sex_map[st.session_state.sex]
         debug_print("Debug - Chart Info:", {
             'sex': selected_sex,
@@ -316,7 +323,7 @@ for tab, metric_key in [
 
 
 # --- Data Table and Export ---
-st.header("Patient Measurement History")
+st.header(get_translation('patient_measurement_history', language_code))
 
 if not st.session_state.patient_data.empty:
     display_df = st.session_state.patient_data.copy()
@@ -406,11 +413,11 @@ if not st.session_state.patient_data.empty:
             return f"PMA: {row['PMA']}, {', '.join(values)}"
             
         row_to_remove = st.selectbox(
-            "Select measurement to remove", 
+            get_translation('select_measurement_remove', language_code), 
             options=display_df.index, 
             format_func=format_measurement
         )
-        if st.button("➖ Remove Selected", width='stretch'):
+        if st.button(f"➖ {get_translation('remove_selected', language_code)}", width='stretch'):
             st.session_state.patient_data = st.session_state.patient_data.drop(index=row_to_remove).reset_index(drop=True)
             st.rerun()
 
@@ -425,12 +432,12 @@ if not st.session_state.patient_data.empty:
     filename = (f"{patient_name or 'patient'}"
                f"_GA{st.session_state.birth_ga_weeks}w{st.session_state.birth_ga_days}d"
                f"_DOB{st.session_state.birth_date.strftime('%Y%m%d')}"
-               f"_{'M' if st.session_state.sex == 'Male' else 'F'}"
+               f"_{'M' if st.session_state.sex == get_translation('male_option', language_code) else 'F'}"
                f".csv")
     
     csv = export_df.to_csv(index=False).encode('utf-8')
     col1.download_button(
-        label="📥 Download Data as CSV",
+        label=f"📥 {get_translation('download_csv', language_code)}",
         data=csv,
         file_name=filename,
         mime='text/csv',
@@ -438,8 +445,8 @@ if not st.session_state.patient_data.empty:
     )
 
     # PDF Export
-    if col2.button("📄 Generate PDF Report", width='stretch'):
-        with st.spinner("Generating PDF..."):
+    if col2.button(f"📄 {get_translation('generate_pdf', language_code)}", width='stretch'):
+        with st.spinner(get_translation('generating_pdf', language_code)):
             pdf_output = generate_pdf_report(
                 st.session_state.patient_data,
                 patient_name,
@@ -454,18 +461,13 @@ if not st.session_state.patient_data.empty:
                 create_download_link(
                     pdf_output, 
                     f"{patient_name or 'patient'}_growth_report.pdf", 
-                    "Click here to download your PDF report"
+                    get_translation('download_pdf_link', language_code)
                 ), 
                 unsafe_allow_html=True
             )
 
 else:
-    st.info("No measurements added yet. Use the sidebar to add data points.")
+    st.info(get_translation('no_measurements', language_code))
 
 # Footer with attribution and links
-st.markdown("""
-<div style='text-align: center; color: grey; padding: 20px;'>
-    <p>Based on data from <a href='https://intergrowth21.ndog.ox.ac.uk/preterm/' target='_blank'>INTERGROWTH-21st Preterm Growth Standards</a></p>
-    <p>Developed by Maycon Queiros | <a href='https://github.com/mayconrpgm/preterm_baby_growth_tracker' target='_blank'>Source Code on GitHub</a></p>
-</div>
-""", unsafe_allow_html=True)
+st.markdown(get_translation('footer_html', language_code), unsafe_allow_html=True)
