@@ -5,3 +5,5 @@ plotly
 fpdf2
 scikit-learn
 kaleido
+pytest
+pytest-mock
