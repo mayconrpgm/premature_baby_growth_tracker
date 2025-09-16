@@ -329,7 +329,6 @@ if not st.session_state.patient_data.empty:
             calculate_chronological_age_days(birth_date_dt, datetime.combine(r['measurement_date'], datetime.min.time()))
         ) if r['measurement_date'] else 'N/A', 
         axis=1)
-    
     display_df['Corrected Age'] = display_df.apply(
         lambda r: format_age(
             calculate_corrected_age_days(
@@ -387,32 +386,124 @@ if not st.session_state.patient_data.empty:
             )
             display_columns.append(config['display_name'])
             
-    # Display the dataframe without index
-    st.dataframe(
-        display_df[display_columns].style.format({col: "{}".format for col in display_columns}),
-        width='stretch',
-        hide_index=True
-    )
-
-    # Remove measurement
+    # Display the dataframe with row selection
     if not display_df.empty:
-        # Create a descriptive string for each measurement
-        def format_measurement(idx):
-            row = display_df.loc[idx]
-            values = []
-            for metric_key in metric_configs:
-                if f"{metric_key}_Value" in row and row[f"{metric_key}_Value"] != "N/A":
-                    values.append(f"{metric_configs[metric_key]['display_name']}: {row[f'{metric_key}_Value']}")
-            return f"PMA: {row['PMA']}, {', '.join(values)}"
+        # Initialize selection state if not exists
+        if 'selected_row' not in st.session_state:
+            st.session_state.selected_row = None
             
-        row_to_remove = st.selectbox(
-            "Select measurement to remove", 
-            options=display_df.index, 
-            format_func=format_measurement
+        # Display dataframe with selection enabled
+        selected_df = st.dataframe(
+            display_df[display_columns].style.format({col: "{}".format for col in display_columns}),
+            width='stretch',
+            hide_index=True,
+            selection_mode="single-row",
+            on_select="rerun",
+            key="measurements_table"
         )
-        if st.button("➖ Remove Selected", width='stretch'):
-            st.session_state.patient_data = st.session_state.patient_data.drop(index=row_to_remove).reset_index(drop=True)
+        
+        # Get selected row from the dataframe selection
+        selected_row = None
+        if selected_df.selection.rows:
+            selected_row = selected_df.selection.rows[0]
+            
+        # Create buttons for actions on selected row
+        # col1, col2 = st.columns(2)
+        # with col1:
+        #     remove_btn = st.button("➖ Remove Selected", width='stretch', disabled=selected_row is None)
+        
+        # with col2:
+        #     edit_btn = st.button("✏️ Edit Selected", width='stretch', disabled=selected_row is None)
+        remove_btn = st.button("➖ Remove Selected", width='stretch', disabled=selected_row is None)
+
+        # Handle remove action
+        if remove_btn and selected_row is not None:
+            st.session_state.patient_data = st.session_state.patient_data.drop(index=selected_row).reset_index(drop=True)
             st.rerun()
+            
+        # Handle edit action
+        # if edit_btn and selected_row is not None:
+        #     row_data = st.session_state.patient_data.iloc[selected_row]
+            
+        #     # Create a form for editing the measurement
+        #     with st.form("edit_measurement_form"):
+        #         st.subheader("Edit Measurement")
+                
+        #         # PMA input
+        #         col1, col2 = st.columns(2)
+        #         with col1:
+        #             edit_pma_weeks = st.number_input("PMA (weeks)", 
+        #                                            min_value=st.session_state.birth_ga_weeks, 
+        #                                            max_value=64, 
+        #                                            value=int(row_data['pma_weeks']), 
+        #                                            step=1)
+        #         with col2:
+        #             edit_pma_days = st.number_input("PMA (days)", 
+        #                                           min_value=0, 
+        #                                           max_value=6, 
+        #                                           value=int(row_data['pma_days']), 
+        #                                           step=1)
+                
+        #         # Date input
+        #         edit_date = st.date_input("Measurement Date", 
+        #                                  value=row_data['measurement_date'] if row_data['measurement_date'] else datetime.now().date())
+                
+        #         # Measurements
+        #         edit_weight = st.number_input("Weight (kg)", 
+        #                                     min_value=0.0, 
+        #                                     value=float(row_data['weight']) if row_data['weight'] else 0.0, 
+        #                                     step=0.001, 
+        #                                     format="%.3f")
+                
+        #         edit_length = st.number_input("Length (cm)", 
+        #                                     min_value=0.0, 
+        #                                     value=float(row_data['length']) if row_data['length'] else 0.0, 
+        #                                     step=0.1, 
+        #                                     format="%.1f")
+                
+        #         edit_hc = st.number_input("Head Circumference (cm)", 
+        #                                 min_value=0.0, 
+        #                                 value=float(row_data['hc']) if row_data['hc'] else 0.0, 
+        #                                 step=0.1, 
+        #                                 format="%.1f")
+                
+        #         # Form buttons
+        #         col3, col4 = st.columns(2)
+        #         with col3:
+        #             cancel_btn = st.form_submit_button("Cancel", type="secondary")
+        #         with col4:
+        #             save_btn = st.form_submit_button("Save Changes", type="primary")
+                
+        #         if save_btn:
+        #             # Update the measurement in the dataframe
+        #             st.session_state.patient_data.at[selected_row, 'pma_weeks'] = edit_pma_weeks
+        #             st.session_state.patient_data.at[selected_row, 'pma_days'] = edit_pma_days
+        #             st.session_state.patient_data.at[selected_row, 'measurement_date'] = edit_date
+        #             st.session_state.patient_data.at[selected_row, 'weight'] = edit_weight if edit_weight > 0 else None
+        #             st.session_state.patient_data.at[selected_row, 'length'] = edit_length if edit_length > 0 else None
+        #             st.session_state.patient_data.at[selected_row, 'hc'] = edit_hc if edit_hc > 0 else None
+                    
+        #             # Sort the dataframe by PMA
+        #             st.session_state.patient_data = st.session_state.patient_data.sort_values(
+        #                 by=['pma_weeks', 'pma_days']).reset_index(drop=True)
+                    
+        #             # Clear the selected row
+        #             st.session_state.selected_row = None
+        #             st.rerun()
+                
+        #         if cancel_btn:
+        #             # Clear the selected row
+        #             st.session_state.selected_row = None
+        #             st.rerun()
+    else:
+        # Display empty dataframe when no data
+        st.dataframe(
+            display_df[display_columns] if not display_columns else pd.DataFrame(columns=display_columns),
+            width='stretch',
+            hide_index=True
+        )
+
+    # Remove measurement functionality is now handled by the dataframe selection above
 
     # Export Buttons
     col1, col2 = st.columns(2)
