@@ -2,7 +2,15 @@
 
 import pandas as pd
 from datetime import datetime
-from util import pma_to_decimal_weeks, decimal_weeks_to_pma, calculate_pma_from_date
+from util import (
+    pma_to_decimal_weeks,
+    decimal_weeks_to_pma,
+    calculate_pma_from_date,
+    calculate_chronological_age_days,
+    format_age,
+    calculate_corrected_age_days,
+)
+from data_processing import get_z_score_and_percentile
 
 class Patient:
     """Class representing a patient with growth measurements."""
@@ -205,3 +213,218 @@ class Patient:
         
         # Return as a Series indexed by PMA decimal
         return pd.Series(df[metric].values, index=df['pma_decimal'])
+
+    def get_measurements_dataframe_for_table(self, metric_configs, data):
+        """Prepare processed dataframe and display columns for the measurements table.
+
+        Args:
+            metric_configs: Dict with metric configuration (display_name, db_name, data_col)
+            data: DataFrame with reference curves (INTERGROWTH-21st)
+
+        Returns:
+            Tuple of (processed_dataframe, display_columns_list)
+        """
+        if self.measurements.empty:
+            return pd.DataFrame(), []
+
+        display_df = self.measurements.copy()
+
+        # Calculate derived values for the table
+        birth_date_dt = datetime.combine(self.birth_date, datetime.min.time())
+
+        # Chronological and corrected age strings
+        display_df['Chronological Age'] = display_df.apply(
+            lambda r: format_age(
+                calculate_chronological_age_days(
+                    birth_date_dt,
+                    datetime.combine(r['measurement_date'], datetime.min.time()) if pd.notnull(r['measurement_date']) else birth_date_dt,
+                )
+            ) if pd.notnull(r['measurement_date']) else 'N/A',
+            axis=1,
+        )
+
+        display_df['Corrected Age'] = display_df.apply(
+            lambda r: format_age(
+                calculate_corrected_age_days(
+                    birth_date_dt,
+                    datetime.combine(r['measurement_date'], datetime.min.time()) if pd.notnull(r['measurement_date']) else birth_date_dt,
+                    self.birth_ga_weeks,
+                    self.birth_ga_days,
+                )
+            ) if pd.notnull(r['measurement_date']) else 'N/A',
+            axis=1,
+        )
+
+        # Map sex for reference data
+        sex_map = {"Male": "Boy", "Female": "Girl"}
+        mapped_sex = sex_map.get(self.sex, "Boy")
+
+        # Calculate z-scores and percentiles for all metrics
+        for metric_key, config in metric_configs.items():
+            if display_df[config['data_col']].notnull().any():
+                metric_values = display_df[config['data_col']]
+                metric_pma_decimal = display_df.apply(
+                    lambda r: pma_to_decimal_weeks(r['pma_weeks'], r['pma_days']),
+                    axis=1,
+                )
+
+                metric_z_scores = []
+                metric_percentiles = []
+                for i, value in enumerate(metric_values):
+                    if pd.notnull(value):
+                        z, p = get_z_score_and_percentile(
+                            metric_pma_decimal.iloc[i], value, mapped_sex, config['db_name'], data
+                        )
+                        metric_z_scores.append(f"{z:.2f}" if not pd.isna(z) else "N/A")
+                        metric_percentiles.append(f"{p:.1f}" if not pd.isna(p) else "N/A")
+                    else:
+                        metric_z_scores.append("N/A")
+                        metric_percentiles.append("N/A")
+
+                display_df[f"{metric_key}_Z-Score"] = metric_z_scores
+                display_df[f"{metric_key}_Percentile"] = metric_percentiles
+
+        # Format PMA and Date
+        display_df['PMA'] = display_df.apply(lambda r: f"{r['pma_weeks']}w {r['pma_days']}d", axis=1)
+        display_df['Date'] = display_df['measurement_date'].map(
+            lambda x: x.strftime('%Y-%m-%d') if pd.notnull(x) else 'N/A'
+        )
+
+        # Growth metrics if there are at least 2 measurements
+        if len(display_df) >= 2:
+            sorted_df = display_df.sort_values('measurement_date')
+
+            # Weight gain calculations
+            if sorted_df['weight'].notnull().sum() >= 2:
+                first_weight_row = sorted_df[sorted_df['weight'].notnull()].iloc[0]
+                first_weight = first_weight_row['weight']
+                first_date = first_weight_row['measurement_date']
+
+                def calc_weight_gain_since_first(row):
+                    if pd.isnull(row['weight']) or pd.isnull(first_weight) or row['measurement_date'] == first_date:
+                        return None
+                    days = (row['measurement_date'] - first_date).days
+                    if days <= 0:
+                        return None
+                    return ((row['weight'] - first_weight) * 1000) / days
+
+                display_df['weight_gain_per_day'] = display_df.apply(calc_weight_gain_since_first, axis=1)
+
+                def calc_weight_gain_since_prev(row):
+                    if pd.isnull(row['weight']):
+                        return None
+                    prev_rows = sorted_df[
+                        (sorted_df['measurement_date'] < row['measurement_date']) & (sorted_df['weight'].notnull())
+                    ]
+                    if len(prev_rows) == 0:
+                        return None
+                    prev_row = prev_rows.iloc[-1]
+                    days = (row['measurement_date'] - prev_row['measurement_date']).days
+                    if days <= 0:
+                        return None
+                    return ((row['weight'] - prev_row['weight']) * 1000) / days
+
+                for idx, row in display_df.iterrows():
+                    display_df.at[idx, 'weight_gain_since_prev'] = calc_weight_gain_since_prev(row)
+
+            # Length gain calculations
+            if sorted_df['length'].notnull().sum() >= 2:
+                first_length_row = sorted_df[sorted_df['length'].notnull()].iloc[0]
+                first_length = first_length_row['length']
+                first_length_date = first_length_row['measurement_date']
+
+                def calc_length_gain_since_first(row):
+                    if pd.isnull(row['length']) or pd.isnull(first_length) or row['measurement_date'] == first_length_date:
+                        return None
+                    days = (row['measurement_date'] - first_length_date).days
+                    if days <= 0:
+                        return None
+                    return (row['length'] - first_length) / days
+
+                display_df['length_gain_per_day'] = display_df.apply(calc_length_gain_since_first, axis=1)
+
+                def calc_length_gain_since_prev(row):
+                    if pd.isnull(row['length']):
+                        return None
+                    prev_rows = sorted_df[
+                        (sorted_df['measurement_date'] < row['measurement_date']) & (sorted_df['length'].notnull())
+                    ]
+                    if len(prev_rows) == 0:
+                        return None
+                    prev_row = prev_rows.iloc[-1]
+                    days = (row['measurement_date'] - prev_row['measurement_date']).days
+                    if days <= 0:
+                        return None
+                    return (row['length'] - prev_row['length']) / days
+
+                for idx, row in display_df.iterrows():
+                    display_df.at[idx, 'length_gain_since_prev'] = calc_length_gain_since_prev(row)
+
+            # Head circumference gain calculations
+            if sorted_df['hc'].notnull().sum() >= 2:
+                first_hc_row = sorted_df[sorted_df['hc'].notnull()].iloc[0]
+                first_hc = first_hc_row['hc']
+                first_hc_date = first_hc_row['measurement_date']
+
+                def calc_hc_gain_since_first(row):
+                    if pd.isnull(row['hc']) or pd.isnull(first_hc) or row['measurement_date'] == first_hc_date:
+                        return None
+                    days = (row['measurement_date'] - first_hc_date).days
+                    if days <= 0:
+                        return None
+                    return (row['hc'] - first_hc) / days
+
+                display_df['hc_gain_per_day'] = display_df.apply(calc_hc_gain_since_first, axis=1)
+
+                def calc_hc_gain_since_prev(row):
+                    if pd.isnull(row['hc']):
+                        return None
+                    prev_rows = sorted_df[
+                        (sorted_df['measurement_date'] < row['measurement_date']) & (sorted_df['hc'].notnull())
+                    ]
+                    if len(prev_rows) == 0:
+                        return None
+                    prev_row = prev_rows.iloc[-1]
+                    days = (row['measurement_date'] - prev_row['measurement_date']).days
+                    if days <= 0:
+                        return None
+                    return (row['hc'] - prev_row['hc']) / days
+
+                for idx, row in display_df.iterrows():
+                    display_df.at[idx, 'hc_gain_since_prev'] = calc_hc_gain_since_prev(row)
+
+        # Format measurement values and build display columns
+        display_columns = ['PMA', 'Date', 'Chronological Age', 'Corrected Age']
+
+        for metric_key, config in metric_configs.items():
+            if display_df[config['data_col']].notnull().any():
+                display_df[config['display_name']] = display_df[config['data_col']].map(
+                    lambda x: f"{x:.3f}" if metric_key == 'weight' else (f"{x:.1f}" if pd.notnull(x) else '-')
+                )
+                display_columns.append(config['display_name'])
+
+                if f"{metric_key}_gain_per_day" in display_df.columns:
+                    if metric_key == 'weight':
+                        display_df[f"Avg {config['display_name']} Gain/Day (g)"] = display_df[f"{metric_key}_gain_per_day"].map(
+                            lambda x: f"{x:.1f}" if pd.notnull(x) else '-'
+                        )
+                        display_columns.append(f"Avg {config['display_name']} Gain/Day (g)")
+                    else:
+                        display_df[f"Avg {config['display_name']} Gain/Day (cm)"] = display_df[f"{metric_key}_gain_per_day"].map(
+                            lambda x: f"{x:.2f}" if pd.notnull(x) else '-'
+                        )
+                        display_columns.append(f"Avg {config['display_name']} Gain/Day (cm)")
+
+                if f"{metric_key}_gain_since_prev" in display_df.columns:
+                    if metric_key == 'weight':
+                        display_df[f"Avg {config['display_name']} Gain/Day Since Last (g)"] = display_df[f"{metric_key}_gain_since_prev"].map(
+                            lambda x: f"{x:.1f}" if pd.notnull(x) else '-'
+                        )
+                        display_columns.append(f"Avg {config['display_name']} Gain/Day Since Last (g)")
+                    else:
+                        display_df[f"Avg {config['display_name']} Gain/Day Since Last (cm)"] = display_df[f"{metric_key}_gain_since_prev"].map(
+                            lambda x: f"{x:.2f}" if pd.notnull(x) else '-'
+                        )
+                        display_columns.append(f"Avg {config['display_name']} Gain/Day Since Last (cm)")
+
+        return display_df, display_columns
