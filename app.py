@@ -407,7 +407,7 @@ if not st.session_state.patient_data.empty:
     )
 
     # PDF Export (conditionally available)
-    if col2.button("📄 Generate PDF Report", width='stretch', disabled=st.session_state.pdf_export_available):
+    if col2.button("📄 Generate PDF Report", width='stretch', disabled=not st.session_state.pdf_export_available):
         with st.spinner("Generating PDF..."):
             pdf_output = generate_pdf_report(
                 st.session_state.patient_data,
