@@ -50,22 +50,15 @@ class PDF(FPDF):
             fig: Plotly figure object
             title: Chart title
         """
-        # Create a temporary file for the image
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as tmp:
-            # Save the figure as an image
-            fig.write_image(tmp.name, width=700, height=850)
+        img_bytes = fig.to_image(format="png", width=700, height=850)
             
-            # Add the title
-            self.set_font('Arial', 'B', 12)
-            self.cell(0, 10, title, 0, 1, 'L')
-            
-            # Add the image to the PDF
-            self.image(tmp.name, x=10, y=None, w=190)
-            self.ln(5)
-            
-            # Clean up the temporary file
-            tmp.close()
-            os.unlink(tmp.name)
+        # Add the title
+        self.set_font('Arial', 'B', 12)
+        self.cell(0, 10, title, 0, 1, 'L')
+        
+        # Add the image to the PDF
+        self.image(img_bytes, x=10, y=None, w=190)
+        self.ln(5)
 
 def create_download_link(val, filename, link_text):
     """Generates a download link for a file.

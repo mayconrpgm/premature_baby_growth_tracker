@@ -193,9 +193,9 @@ with st.sidebar:
     # Measurement inputs
     st.subheader("Measurements")
             
-    weight = st.number_input("Weight (kg)", min_value=0.0, step=0.001, format="%.3f", key="weight")
-    length = st.number_input("Length (cm)", min_value=0.0, step=0.1, format="%.1f", key="length")
-    hc = st.number_input("Head Circumference (cm)", min_value=0.0, step=0.1, format="%.1f", key="hc")
+    weight = st.number_input("Weight (kg)", min_value=0.0, step=0.001, value=None, placeholder="2.500", format="%.3f", key="weight")
+    length = st.number_input("Length (cm)", min_value=0.0, step=0.1, value=None, placeholder="35.0", format="%.1f", key="length")
+    hc = st.number_input("Head Circumference (cm)", min_value=0.0, step=0.1, value=None, placeholder="30.0", format="%.1f", key="hc")
 
     if st.button("➕ Add Measurement", width='stretch'):
         if not any([weight > 0, length > 0, hc > 0]):
