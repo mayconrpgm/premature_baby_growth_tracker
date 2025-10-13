@@ -11,7 +11,7 @@ from data_processing import load_intergrowth_data, get_z_score_and_percentile, p
 from charts import create_full_chart
 from pdf_export import generate_pdf_report, create_download_link
 from patient import Patient
-from util import pma_to_decimal_weeks, decimal_weeks_to_pma, calculate_chronological_age_days, format_age, calculate_corrected_age_days, calculate_pma_from_date, debug_print
+from util import pma_to_decimal_weeks, decimal_weeks_to_pma, calculate_chronological_age_days, format_age, calculate_corrected_age_days, calculate_pma_from_date, is_pdf_export_available, debug_print
 
 # --- Page Configuration ---
 st.set_page_config(
@@ -35,20 +35,8 @@ st.markdown(
 if 'debug_mode' not in st.session_state:
     st.session_state.debug_mode = False
 
-# Check if PDF export is available (Plotly static image export)
-def _is_pdf_export_available():
-    try:
-        import plotly.graph_objects as go
-        # Minimal test figure to probe image export capability
-        fig = go.Figure()
-        fig.add_scatter(x=[0, 1], y=[0, 1], mode='lines')
-        _ = fig.to_image(format="png", width=2, height=2)
-        return True
-    except Exception:
-        return False
-
 if 'pdf_export_available' not in st.session_state:
-    st.session_state.pdf_export_available = _is_pdf_export_available()
+    st.session_state.pdf_export_available = is_pdf_export_available()
 
 # Load the data
 data, error_msg = load_intergrowth_data()
@@ -419,7 +407,7 @@ if not st.session_state.patient_data.empty:
     )
 
     # PDF Export (conditionally available)
-    if col2.button("📄 Generate PDF Report", width='stretch', disabled=not st.session_state.chart_figures):
+    if col2.button("📄 Generate PDF Report", width='stretch', disabled=st.session_state.chart_figures):
         with st.spinner("Generating PDF..."):
             pdf_output = generate_pdf_report(
                 st.session_state.patient_data,
@@ -440,7 +428,7 @@ if not st.session_state.patient_data.empty:
                 unsafe_allow_html=True
             )
 
-    if st.session_state.pdf_export_available:
+    if not st.session_state.pdf_export_available:
         # Hide the button on environments without image export support (e.g., Streamlit Cloud without Chrome)
         st.info("PDF export is unavailable in this environment.")
 

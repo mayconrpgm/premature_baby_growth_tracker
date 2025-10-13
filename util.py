@@ -108,3 +108,16 @@ def calculate_pma_from_date(birth_ga_decimal: float,
     """
     chrono_age_days = calculate_chronological_age_days(birth_date, measurement_date)
     return birth_ga_decimal + (chrono_age_days / 7)
+
+
+# Check if PDF export is available (Plotly static image export)
+def is_pdf_export_available():
+    try:
+        import plotly.graph_objects as go
+        # Minimal test figure to probe image export capability
+        fig = go.Figure()
+        fig.add_scatter(x=[0, 1], y=[0, 1], mode='lines')
+        _ = fig.to_image(format="png", width=2, height=2)
+        return True
+    except Exception:
+        return False
