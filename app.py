@@ -419,28 +419,28 @@ if not st.session_state.patient_data.empty:
     )
 
     # PDF Export (conditionally available)
+    if col2.button("📄 Generate PDF Report", width='stretch', disabled=not st.session_state.chart_figures):
+        with st.spinner("Generating PDF..."):
+            pdf_output = generate_pdf_report(
+                st.session_state.patient_data,
+                patient_name,
+                st.session_state.birth_ga_weeks,
+                st.session_state.birth_ga_days,
+                st.session_state.birth_date,
+                st.session_state.sex,
+                st.session_state.chart_figures
+            )
+            
+            st.markdown(
+                create_download_link(
+                    pdf_output, 
+                    f"{patient_name or 'patient'}_growth_report.pdf", 
+                    "Click here to download your PDF report"
+                ), 
+                unsafe_allow_html=True
+            )
+
     if st.session_state.pdf_export_available:
-        if col2.button("📄 Generate PDF Report", width='stretch'):
-            with st.spinner("Generating PDF..."):
-                pdf_output = generate_pdf_report(
-                    st.session_state.patient_data,
-                    patient_name,
-                    st.session_state.birth_ga_weeks,
-                    st.session_state.birth_ga_days,
-                    st.session_state.birth_date,
-                    st.session_state.sex,
-                    st.session_state.chart_figures
-                )
-                
-                st.markdown(
-                    create_download_link(
-                        pdf_output, 
-                        f"{patient_name or 'patient'}_growth_report.pdf", 
-                        "Click here to download your PDF report"
-                    ), 
-                    unsafe_allow_html=True
-                )
-    else:
         # Hide the button on environments without image export support (e.g., Streamlit Cloud without Chrome)
         st.info("PDF export is unavailable in this environment.")
 
