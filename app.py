@@ -21,6 +21,16 @@ st.set_page_config(
     layout="wide"
 )
 
+# Set default sidebar width to 400px
+st.markdown(
+    """
+    <style>
+        [data-testid="stSidebar"] { width: 400px; min-width: 400px; }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 # Enable/Disable debug mode
 if 'debug_mode' not in st.session_state:
     st.session_state.debug_mode = False
@@ -376,11 +386,13 @@ if not st.session_state.patient_data.empty:
     export_df = prepare_export_dataframe(st.session_state.patient_data)
     
     # Create filename with encoded patient information
-    filename = (f"{patient_name or 'patient'}"
-               f"_GA{st.session_state.birth_ga_weeks}w{st.session_state.birth_ga_days}d"
-               f"_DOB{st.session_state.birth_date.strftime('%Y%m%d')}"
-               f"_{'M' if st.session_state.sex == 'Male' else 'F'}"
-               f".csv")
+    filename = (
+        f"P[{patient_name or 'patient'}]"
+        f"_GA[{st.session_state.birth_ga_weeks}w{st.session_state.birth_ga_days}d]"
+        f"_DOB[{st.session_state.birth_date.strftime('%Y%m%d')}]"
+        f"_G[{'M' if st.session_state.sex == 'Male' else 'F'}]"
+        f"_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    )
     
     csv = export_df.to_csv(index=False).encode('utf-8')
     col1.download_button(
