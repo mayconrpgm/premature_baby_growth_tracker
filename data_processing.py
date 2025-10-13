@@ -5,6 +5,7 @@ import numpy as np
 from datetime import datetime
 import os
 import math
+import re
 from typing import Dict, List, Tuple, Optional, Union, Any
 
 # --- Data Loading and Processing ---
@@ -166,44 +167,93 @@ def import_patient_data(file_path):
         Tuple of (patient_data_df, patient_info_dict or None, error_message or None)
     """
     try:
-        # Try to extract patient info from filename
+        # Try to extract patient info from filename using robust bracketed tags
         patient_info = None
         filename = os.path.basename(file_path)
-        if '_GA' in filename and '_DOB' in filename:
-            # Extract patient info from filename
-            name_part = filename.split('_GA')[0]
-            ga_part = filename.split('_GA')[1].split('_DOB')[0]
-            dob_part = filename.split('_DOB')[1]
-            
-            # Check if sex is included in the filename
-            sex = None
-            if '_M.csv' in dob_part:
-                sex = "Male"
-                dob_part = dob_part.split('_M.csv')[0]
-            elif '_F.csv' in dob_part:
-                sex = "Female"
-                dob_part = dob_part.split('_F.csv')[0]
-            else:
-                dob_part = dob_part.split('.csv')[0]
-            
-            # Parse GA
-            ga_weeks = int(ga_part.split('w')[0])
-            ga_days = int(ga_part.split('w')[1].split('d')[0])
-            
-            # Parse birth date
-            birth_date = datetime.strptime(dob_part, '%Y%m%d').date()
-            
-            # Store patient info
-            patient_info = {
-                'name': name_part,
-                'ga_weeks': ga_weeks,
-                'ga_days': ga_days,
-                'birth_date': birth_date
-            }
-            
-            # Add sex if available
-            if sex:
-                patient_info['sex'] = sex
+
+        # New format: P[<name>] _GA[<weeks>w<days>d] _DOB[YYYYMMDD] _G[M|F] _<timestamp>.csv
+        name_match = re.search(r"P\[(.*?)\]", filename)
+        ga_match = re.search(r"GA\[(.*?)\]", filename)
+        dob_match = re.search(r"DOB\[(\d{8})\]", filename)
+        sex_match = re.search(r"G\[(M|F)\]", filename)
+
+        parsed = False
+        if name_match or ga_match or dob_match or sex_match:
+            try:
+                name_part = name_match.group(1) if name_match else None
+                ga_str = ga_match.group(1) if ga_match else None
+
+                ga_weeks, ga_days = None, None
+                if ga_str:
+                    # Accept formats like '31w4d', '31w', '31w 4d'
+                    m = re.match(r"^(\d+)\s*w(?:\s*(\d+)\s*d)?$", ga_str)
+                    if m:
+                        ga_weeks = int(m.group(1))
+                        ga_days = int(m.group(2)) if m.group(2) is not None else 0
+
+                birth_date = None
+                if dob_match:
+                    birth_date = datetime.strptime(dob_match.group(1), '%Y%m%d').date()
+
+                sex = None
+                if sex_match:
+                    sex = 'Male' if sex_match.group(1) == 'M' else 'Female'
+
+                patient_info = {}
+                if name_part:
+                    patient_info['name'] = name_part
+                if ga_weeks is not None:
+                    patient_info['ga_weeks'] = ga_weeks
+                if ga_days is not None:
+                    patient_info['ga_days'] = ga_days
+                if birth_date is not None:
+                    patient_info['birth_date'] = birth_date
+                if sex is not None:
+                    patient_info['sex'] = sex
+
+                # Only mark parsed if we actually extracted something meaningful
+                parsed = len(patient_info) > 0
+            except Exception:
+                parsed = False
+
+        # Fallback to legacy parsing if bracketed tags weren't found or failed
+        if not parsed and ('_GA' in filename and '_DOB' in filename):
+            try:
+                name_part = filename.split('_GA')[0]
+                ga_part = filename.split('_GA')[1].split('_DOB')[0]
+                dob_part = filename.split('_DOB')[1]
+
+                # Check if sex is included in the filename
+                sex = None
+                if '_M.csv' in dob_part:
+                    sex = "Male"
+                    dob_part = dob_part.split('_M.csv')[0]
+                elif '_F.csv' in dob_part:
+                    sex = "Female"
+                    dob_part = dob_part.split('_F.csv')[0]
+                else:
+                    dob_part = dob_part.split('.csv')[0]
+
+                # Parse GA
+                ga_weeks = int(ga_part.split('w')[0])
+                ga_days = int(ga_part.split('w')[1].split('d')[0])
+
+                # Parse birth date
+                birth_date = datetime.strptime(dob_part, '%Y%m%d').date()
+
+                # Store patient info
+                patient_info = {
+                    'name': name_part,
+                    'ga_weeks': ga_weeks,
+                    'ga_days': ga_days,
+                    'birth_date': birth_date
+                }
+
+                # Add sex if available
+                if sex:
+                    patient_info['sex'] = sex
+            except Exception:
+                patient_info = None
         
         imported_df = pd.read_csv(file_path)
         required_columns = ['PMA', 'Date', 'Weight', 'Length', 'HC']
