@@ -410,10 +410,10 @@ class Patient:
                         )
                         display_columns.append(f"Avg {config['display_name']} Gain/Day (g)")
                     else:
-                        display_df[f"Avg {config['display_name']} Gain/Day (cm)"] = display_df[f"{metric_key}_gain_per_day"].map(
-                            lambda x: f"{x:.2f}" if pd.notnull(x) else '-'
+                        display_df[f"Avg {config['display_name']} Gain/Day (mm)"] = display_df[f"{metric_key}_gain_per_day"].map(
+                            lambda x: f"{x * 10:.2f}" if pd.notnull(x) else '-'
                         )
-                        display_columns.append(f"Avg {config['display_name']} Gain/Day (cm)")
+                        display_columns.append(f"Avg {config['display_name']} Gain/Day (mm)")
 
                 if f"{metric_key}_gain_since_prev" in display_df.columns:
                     if metric_key == 'weight':
@@ -422,9 +422,9 @@ class Patient:
                         )
                         display_columns.append(f"Avg {config['display_name']} Gain/Day Since Last (g)")
                     else:
-                        display_df[f"Avg {config['display_name']} Gain/Day Since Last (cm)"] = display_df[f"{metric_key}_gain_since_prev"].map(
-                            lambda x: f"{x:.2f}" if pd.notnull(x) else '-'
+                        display_df[f"Avg {config['display_name']} Gain/Day Since Last (mm)"] = display_df[f"{metric_key}_gain_since_prev"].map(
+                            lambda x: f"{x * 10:.2f}" if pd.notnull(x) else '-'
                         )
-                        display_columns.append(f"Avg {config['display_name']} Gain/Day Since Last (cm)")
+                        display_columns.append(f"Avg {config['display_name']} Gain/Day Since Last (mm)")
 
         return display_df, display_columns
