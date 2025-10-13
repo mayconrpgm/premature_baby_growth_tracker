@@ -35,6 +35,21 @@ st.markdown(
 if 'debug_mode' not in st.session_state:
     st.session_state.debug_mode = False
 
+# Check if PDF export is available (Plotly static image export)
+def _is_pdf_export_available():
+    try:
+        import plotly.graph_objects as go
+        # Minimal test figure to probe image export capability
+        fig = go.Figure()
+        fig.add_scatter(x=[0, 1], y=[0, 1], mode='lines')
+        _ = fig.to_image(format="png", width=2, height=2)
+        return True
+    except Exception:
+        return False
+
+if 'pdf_export_available' not in st.session_state:
+    st.session_state.pdf_export_available = _is_pdf_export_available()
+
 # Load the data
 data, error_msg = load_intergrowth_data()
 if error_msg:
@@ -376,11 +391,7 @@ if not st.session_state.patient_data.empty:
             hide_index=True
         )
 
-    # Remove measurement functionality is now handled by the dataframe selection above
-
-    # Export Buttons
-    col1, col2 = st.columns(2)
-    
+  
     # CSV Export
     # Prepare export dataframe in the format compatible with import
     export_df = prepare_export_dataframe(st.session_state.patient_data)
@@ -395,6 +406,10 @@ if not st.session_state.patient_data.empty:
     )
     
     csv = export_df.to_csv(index=False).encode('utf-8')
+
+    # Export Buttons
+    col1, col2 = st.columns(2)
+    
     col1.download_button(
         label="📥 Download Data as CSV",
         data=csv,
@@ -403,27 +418,31 @@ if not st.session_state.patient_data.empty:
         width='stretch'
     )
 
-    # PDF Export
-    if col2.button("📄 Generate PDF Report", width='stretch'):
-        with st.spinner("Generating PDF..."):
-            pdf_output = generate_pdf_report(
-                st.session_state.patient_data,
-                patient_name,
-                st.session_state.birth_ga_weeks,
-                st.session_state.birth_ga_days,
-                st.session_state.birth_date,
-                st.session_state.sex,
-                st.session_state.chart_figures
-            )
-            
-            st.markdown(
-                create_download_link(
-                    pdf_output, 
-                    f"{patient_name or 'patient'}_growth_report.pdf", 
-                    "Click here to download your PDF report"
-                ), 
-                unsafe_allow_html=True
-            )
+    # PDF Export (conditionally available)
+    if st.session_state.pdf_export_available:
+        if col2.button("📄 Generate PDF Report", width='stretch'):
+            with st.spinner("Generating PDF..."):
+                pdf_output = generate_pdf_report(
+                    st.session_state.patient_data,
+                    patient_name,
+                    st.session_state.birth_ga_weeks,
+                    st.session_state.birth_ga_days,
+                    st.session_state.birth_date,
+                    st.session_state.sex,
+                    st.session_state.chart_figures
+                )
+                
+                st.markdown(
+                    create_download_link(
+                        pdf_output, 
+                        f"{patient_name or 'patient'}_growth_report.pdf", 
+                        "Click here to download your PDF report"
+                    ), 
+                    unsafe_allow_html=True
+                )
+    else:
+        # Hide the button on environments without image export support (e.g., Streamlit Cloud without Chrome)
+        st.info("PDF export is unavailable in this environment.")
 
 else:
     st.info("No measurements added yet. Use the sidebar to add data points.")
