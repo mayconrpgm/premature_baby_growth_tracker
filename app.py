@@ -21,6 +21,99 @@ st.set_page_config(
     layout="wide"
 )
 
+# First-visit install banner and mobile home screen configuration
+st.markdown(
+    """
+<style>
+.install-banner {
+  display: none;
+  position: fixed;
+  left: 16px;
+  right: 16px;
+  bottom: 16px;
+  z-index: 99999;
+  background: #f0f7ff;
+  color: #0b3d91;
+  border: 1px solid #cde3ff;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+  padding: 12px 14px;
+  font-size: 14px;
+}
+.install-banner .title { font-weight: 600; margin-bottom: 4px; }
+.install-banner .hint { color: #244b8a; margin-bottom: 8px; }
+.install-banner .actions { display: flex; gap: 10px; align-items: center; }
+.install-banner .btn-link {
+  background: transparent;
+  color: #0b3d91;
+  border: none;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+@media (min-width: 769px) {
+  .install-banner { display: none !important; }
+}
+</style>
+<div id=\"install-banner\" class=\"install-banner\">
+  <div class=\"title\">Save this app to your home screen</div>
+  <div class=\"hint\">Tap the menu and choose \"Add to Home Screen\" for a faster, full-screen experience.</div>
+  <div class=\"actions\">
+    <button id=\"dismiss-install\" class=\"btn-link\">Dismiss</button>
+  </div>
+</div>
+<script>
+(function(){
+  function addHead(tagName, attrs){
+    var el = document.createElement(tagName);
+    for (var k in attrs) { el.setAttribute(k, attrs[k]); }
+    document.head.appendChild(el);
+    return el;
+  }
+  function generateIcon(size){
+    var canvas = document.createElement('canvas');
+    canvas.width = size; canvas.height = size;
+    var ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#0f4c81';
+    ctx.fillRect(0,0,size,size);
+    ctx.font = Math.floor(size*0.6) + 'px serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText('👶', size/2, size/2 + 8);
+    return canvas.toDataURL('image/png');
+  }
+  var appName = 'Preterm Growth Tracker';
+  addHead('meta', { name: 'application-name', content: appName });
+  addHead('meta', { name: 'apple-mobile-web-app-title', content: appName });
+  addHead('meta', { name: 'apple-mobile-web-app-capable', content: 'yes' });
+  addHead('meta', { name: 'theme-color', content: '#0f4c81' });
+  var icon192 = generateIcon(192);
+  addHead('link', { rel: 'icon', sizes: '192x192', href: icon192 });
+  addHead('link', { rel: 'apple-touch-icon', href: icon192 });
+
+  function showInstallBanner(){
+    var installed = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+    var dismissed = localStorage.getItem('installPromptDismissed') === 'true';
+    var isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+    var banner = document.getElementById('install-banner');
+    if (!banner) return;
+    if (!installed && !dismissed && isMobile) {
+      banner.style.display = 'block';
+    }
+    var btn = document.getElementById('dismiss-install');
+    if (btn) {
+      btn.addEventListener('click', function(){
+        localStorage.setItem('installPromptDismissed','true');
+        banner.style.display = 'none';
+      }, { once: true });
+    }
+  }
+  window.addEventListener('load', showInstallBanner);
+})();
+</script>
+""",
+    unsafe_allow_html=True,
+)
 # Enable/Disable debug mode
 if 'debug_mode' not in st.session_state:
     st.session_state.debug_mode = False
