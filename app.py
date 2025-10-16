@@ -201,6 +201,35 @@ with st.sidebar:
     st.session_state.debug_mode = st.toggle("Debug Mode", value=st.session_state.debug_mode)
 # --- Main Panel ---
 
+# Portrait-only banner for mobile users
+st.markdown(
+    """
+<style>
+.landscape-warning {
+    display: none;
+    position: sticky;
+    top: 0;
+    z-index: 9999;
+    background: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffeeba;
+    padding: 10px 14px;
+    margin-bottom: 12px;
+    border-radius: 6px;
+    font-size: 14px;
+}
+@media (max-width: 768px) and (orientation: portrait) {
+    .landscape-warning { display: block; }
+}
+@media (orientation: landscape) {
+    .landscape-warning { display: none; }
+}
+</style>
+<div class="landscape-warning">For a better experience, use this app in landscape mode.</div>
+""",
+    unsafe_allow_html=True,
+)
+
 # Instructions at the top
 with st.expander("Instructions", expanded=False):
     st.markdown("""
