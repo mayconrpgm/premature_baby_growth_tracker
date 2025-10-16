@@ -21,16 +21,6 @@ st.set_page_config(
     layout="wide"
 )
 
-# Set default sidebar width to 400px
-st.markdown(
-    """
-    <style>
-        [data-testid="stSidebar"] { width: 400px; min-width: 400px; }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
 # Enable/Disable debug mode
 if 'debug_mode' not in st.session_state:
     st.session_state.debug_mode = False
@@ -119,31 +109,23 @@ with st.sidebar:
         import tempfile
         import os
         
-        # Create a temporary directory
-        temp_dir = tempfile.mkdtemp()
-        
-        # Preserve the original filename
         original_filename = uploaded_file.name
-        temp_file_path = os.path.join(temp_dir, original_filename)
-        
+
         # Check if we've already processed this file
         skip_processing = False
         if 'last_processed_file' in st.session_state and st.session_state.last_processed_file == original_filename:
-            # Skip processing if we've already processed this file
-            # st.info(f"File '{original_filename}' has already been processed.")
             skip_processing = True
             
         if not skip_processing:
-            # Save the file with its original name
-            with open(temp_file_path, 'wb') as tmp_file:
-                tmp_file.write(uploaded_file.getvalue())
-            
-            # Process the saved file
-            patient_data, patient_info, error_msg = import_patient_data(temp_file_path)
-            
-            # Clean up the temporary file and directory
-            os.unlink(temp_file_path)
-            os.rmdir(temp_dir)
+            # Use a context-managed temporary directory to ensure cleanup
+            with tempfile.TemporaryDirectory() as temp_dir:
+                temp_file_path = os.path.join(temp_dir, original_filename)
+                # Write uploaded bytes to disk safely
+                with open(temp_file_path, 'wb') as tmp_file:
+                    tmp_file.write(uploaded_file.getvalue())
+                
+                # Process the saved file
+                patient_data, patient_info, error_msg = import_patient_data(temp_file_path)
             
             # Store the filename we just processed
             st.session_state.last_processed_file = original_filename

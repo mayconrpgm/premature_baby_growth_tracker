@@ -7,8 +7,10 @@ import os
 import math
 import re
 from typing import Dict, List, Tuple, Optional, Union, Any
+import streamlit as st
 
 # --- Data Loading and Processing ---
+@st.cache_data(ttl=3600, show_spinner=False)
 def load_intergrowth_data() -> Tuple[pd.DataFrame, Optional[str]]:
     """Loads and processes the INTERGROWTH-21st data.
     
