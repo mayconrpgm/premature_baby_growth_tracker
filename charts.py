@@ -11,7 +11,8 @@ from util import debug_print, pma_to_decimal_weeks
 def create_full_chart(chart_data: pd.DataFrame, 
                    config: Dict[str, Any], 
                    metric: Optional[str] = None, 
-                   patient_data: Optional[pd.DataFrame] = None) -> go.Figure:
+                   patient_data: Optional[pd.DataFrame] = None,
+                   is_mobile: bool = False) -> go.Figure:
     """Creates a growth chart with specified metric and configuration.
     
     Args:
@@ -141,8 +142,24 @@ def create_full_chart(chart_data: pd.DataFrame,
             x=0.99,
             orientation="h"
         ),
-        height=800
+        height=800,
+        dragmode=False,
     )
+
+    # Reduce font sizes slightly on mobile devices
+    if is_mobile:
+        fig.update_layout(
+            font=dict(size=10),
+            legend=dict(font=dict(size=12)),
+            xaxis=dict(
+                tickfont=dict(size=9),
+                title=dict(font=dict(size=12))
+            ),
+            yaxis=dict(
+                tickfont=dict(size=9),
+                title=dict(font=dict(size=12))
+            )
+        )
 
     # Display the chart
     st.plotly_chart(fig, use_container_width=True)
