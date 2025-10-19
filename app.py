@@ -22,6 +22,34 @@ st.set_page_config(
     layout="wide"
 )
 
+# Custom CSS to remove blank space at top and bottom
+# st.markdown("""
+#     <style>
+#            /* Remove blank space at top and bottom */ 
+#            .block-container {
+#                padding-top: 1rem;
+#                padding-bottom: 1rem;
+#             }
+           
+#            /* Remove blank space at the center canvas */ 
+#            .st-emotion-cache-z5fcl4 {
+#                position: relative;
+#                top: -62px;
+#                }
+           
+#            /* Make the toolbar transparent and the content below it clickable */ 
+#            .st-emotion-cache-18ni7ap {
+#                pointer-events: none;
+#                background: rgb(255 255 255 / 0%)
+#                }
+#            .st-emotion-cache-zq5wmm {
+#                pointer-events: auto;
+#                background: rgb(255 255 255);
+#                border-radius: 5px;
+#                }
+#     </style>
+#     """, unsafe_allow_html=True)
+
 # Enable/Disable debug mode
 if 'debug_mode' not in st.session_state:
     st.session_state.debug_mode = False
@@ -71,7 +99,7 @@ with st.sidebar:
     st.title("👶 Preterm Growth Tracker")
        
     st.header("Patient Information")
-
+    
     # CSV File Upload - Moved higher
     uploaded_file = st.file_uploader(
         "Import data from CSV",
@@ -79,7 +107,7 @@ with st.sidebar:
         key="measurement_csv_upload",
         help="Upload a CSV file containing measurements. The file should have columns: PMA, Date, Weight, Length, HC"
     )
-
+    
     # Use key only, don't set value from session_state when key is the same
     patient_name = st.text_input("Patient Name (Optional for PDF)", key="patient_name")
     
@@ -103,7 +131,7 @@ with st.sidebar:
     reverse_metric_map = {v: k for k, v in metric_map.items()}
     # Use key only, don't set index from session_state when key is the same
     display_mode = st.radio("Display Curves", ("Percentiles", "Z-Scores"), key="display_mode")
-
+    
     # Check for patient info in imported file if available
     if uploaded_file is not None:
         # Save the uploaded file to a temporary location with original filename
@@ -111,7 +139,7 @@ with st.sidebar:
         import os
         
         original_filename = uploaded_file.name
-
+    
         # Check if we've already processed this file
         skip_processing = False
         if 'last_processed_file' in st.session_state and st.session_state.last_processed_file == original_filename:
@@ -130,7 +158,7 @@ with st.sidebar:
             
             # Store the filename we just processed
             st.session_state.last_processed_file = original_filename
-
+    
             if error_msg:
                 st.error(error_msg)
             elif not patient_data.empty:
@@ -158,11 +186,11 @@ with st.sidebar:
                     st.session_state.temp_patient_info = temp_patient_info
                     st.success("Patient information loaded from filename!")
                     st.rerun()
-
+    
     st.header("Add Measurement")
     
     use_date_for_pma = st.toggle("Calculate PMA from Date", value=True)
-
+    
     if use_date_for_pma:
         meas_date = st.date_input("Measurement Date", value=datetime.now().date())
         birth_ga_decimal = pma_to_decimal_weeks(st.session_state.birth_ga_weeks, st.session_state.birth_ga_days)
@@ -175,34 +203,44 @@ with st.sidebar:
         meas_pma_weeks = c3.number_input("PMA (weeks)", min_value=st.session_state.birth_ga_weeks, max_value=64, step=1)
         meas_pma_days = c4.number_input("PMA (days)", min_value=0, max_value=6, step=1)
         meas_date = None
-
+    
     # Measurement inputs
     st.subheader("Measurements")
             
     weight = st.number_input("Weight (kg)", min_value=0.0, step=0.001, value=None, placeholder="2.500", format="%.3f", key="weight")
     length = st.number_input("Length (cm)", min_value=0.0, step=0.1, value=None, placeholder="35.0", format="%.1f", key="length")
     hc = st.number_input("Head Circumference (cm)", min_value=0.0, step=0.1, value=None, placeholder="30.0", format="%.1f", key="hc")
-
+    
     if st.button("➕ Add Measurement", width='stretch'):
-        if not any([weight > 0, length > 0, hc > 0]):
+        # Safely handle None values before comparing
+        has_weight = (weight is not None) and (weight > 0)
+        has_length = (length is not None) and (length > 0)
+        has_hc = (hc is not None) and (hc > 0)
+    
+        if not any([has_weight, has_length, has_hc]):
             st.error("At least one measurement must be provided")
         else:
             new_data = {
                 'pma_weeks': meas_pma_weeks,
                 'pma_days': meas_pma_days,
                 'measurement_date': meas_date,
-                'weight': weight if weight > 0 else None,
-                'length': length if length > 0 else None,
-                'hc': hc if hc > 0 else None
+                'weight': weight if has_weight else None,
+                'length': length if has_length else None,
+                'hc': hc if has_hc else None
             }
             st.session_state.patient_data = pd.concat([st.session_state.patient_data, pd.DataFrame([new_data])], ignore_index=True)
             st.session_state.patient_data = st.session_state.patient_data.sort_values(by=['pma_weeks', 'pma_days']).reset_index(drop=True)
-
+    
     # Debug mode toggle
     st.session_state.debug_mode = st.toggle("Debug Mode", value=st.session_state.debug_mode)
 # --- Main Panel ---
 
-engine_info = browser_detection_engine()
+if 'engine_info' not in st.session_state:
+    try:
+        st.session_state.engine_info = browser_detection_engine()
+    except Exception:
+        st.session_state.engine_info = {}
+engine_info = st.session_state.engine_info
 is_mobile_device = False
 if isinstance(engine_info, dict):
     is_mobile_device = bool(
@@ -231,11 +269,10 @@ if is_mobile_device:
 @media (max-width: 768px) and (orientation: portrait) {
     .landscape-warning { display: block; }
 }
-@media (orientation: landscape) {
-    .landscape-warning { display: none; }
-}
 </style>
-<div class="landscape-warning">For a better experience, use this app in landscape mode</div>
+<div class="landscape-warning">
+  📱 For a better experience, rotate your device to landscape.
+</div>
 """,
         unsafe_allow_html=True,
     )

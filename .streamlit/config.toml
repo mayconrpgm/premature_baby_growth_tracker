@@ -1,3 +1,7 @@
+[client]
+toolbarMode = "minimal"
+[ui]
+hideTopBar = true
 [theme]
 base="light"
 primaryColor="#F63366"
@@ -8,6 +12,5 @@ font="sans serif"
 [server]
 # Disable file system watcher to reduce open file descriptors under high concurrency
 fileWatcherType = "none"
-
 # Optional: keep headless for server environments
 headless = true
